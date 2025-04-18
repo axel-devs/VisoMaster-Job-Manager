@@ -15,6 +15,10 @@ from app.ui.widgets.actions import common_actions as common_widget_actions
 from app.ui.widgets.actions import graphics_view_actions
 import app.ui.widgets.actions.layout_actions as layout_actions
 
+def toggle_record(main_window):
+    """Toggles the record button programmatically."""
+    main_window.buttonMediaRecord.click()
+
 def set_up_video_seek_line_edit(main_window: 'MainWindow'):
     video_processor = main_window.video_processor
     videoSeekLineEdit = main_window.videoSeekLineEdit

@@ -4,6 +4,7 @@ import uuid
 import copy
 from functools import partial
 from typing import TYPE_CHECKING, Dict
+import os
 
 from PySide6 import QtWidgets
 import numpy as np
@@ -202,6 +203,14 @@ def load_saved_workspace(main_window: 'MainWindow', data_filename: str|bool = Fa
             for control_name, control_value in control.items():
                 main_window.control[control_name] = control_value
 
+            swap_faces_state = data.get('swap_faces_enabled', False)
+            main_window.swapfacesButton.setChecked(swap_faces_state)
+            print(f"[DEBUG] Swap Faces button state restored: {swap_faces_state}")
+
+            if swap_faces_state:
+                print("[DEBUG] Swap Faces was enabled. Triggering face swapping...")
+                video_control_actions.process_swap_faces(main_window)
+
             # Add markers
             video_control_actions.remove_all_markers(main_window)
 
@@ -257,7 +266,7 @@ def save_current_workspace(main_window: 'MainWindow', data_filename:str|bool = F
     markers = copy.deepcopy(main_window.markers)
     # Convert params to dict
     markers = convert_markers_to_supported_type(main_window, markers, dict)
-
+    swap_faces_state = main_window.swapfacesButton.isChecked()
     save_data = {
         'selected_media_id': selected_media_id,
         'target_medias_data': target_medias_data,
@@ -269,7 +278,8 @@ def save_current_workspace(main_window: 'MainWindow', data_filename:str|bool = F
         'last_target_media_folder_path': main_window.last_target_media_folder_path,
         'last_input_media_folder_path': main_window.last_input_media_folder_path,
         'loaded_embedding_filename': main_window.loaded_embedding_filename,
-        'current_widget_parameters': convert_parameters_to_supported_type(main_window, main_window.current_widget_parameters, dict)
+        'current_widget_parameters': convert_parameters_to_supported_type(main_window, main_window.current_widget_parameters, dict),
+        'swap_faces_enabled': swap_faces_state
     }
     if not data_filename:
         data_filename, _ = QtWidgets.QFileDialog.getSaveFileName(main_window, filter='JSON (*.json)')
