@@ -354,7 +354,15 @@ class VideoProcessor(QObject):
 
             if self.file_type=='video':
                 if self.recording:
-                    final_file_path = misc_helpers.get_output_file_path(self.media_path, self.main_window.control['OutputMediaFolder'])
+                    # Use job name for output if specified in the loaded job
+                    job_name = getattr(self.main_window, 'current_job_name', None)
+                    use_job_name_for_output = getattr(self.main_window, 'use_job_name_for_output', False)
+                    final_file_path = misc_helpers.get_output_file_path(
+                        self.media_path,
+                        self.main_window.control['OutputMediaFolder'],
+                        job_name=job_name,
+                        use_job_name_for_output=use_job_name_for_output
+                    )
                     if Path(final_file_path).is_file():
                         os.remove(final_file_path)
                     print("Adding audio...")

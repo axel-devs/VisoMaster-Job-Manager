@@ -781,7 +781,39 @@ class CreateEmbeddingDialog(QtWidgets.QDialog):
             )
             self.accept()
 
+class SaveJobDialog(QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Save Job")
+        self.setWindowIcon(QtGui.QIcon(u":/media/media/visomaster_small.png"))
 
+        # Widgets
+        self.job_name_edit = QtWidgets.QLineEdit(self)
+        self.job_name_edit.setPlaceholderText("Enter job name")
+        self.set_output_name_checkbox = QtWidgets.QCheckBox("Set output file name to job name", self)
+        self.set_output_name_checkbox.setChecked(True)
+
+        # Button box
+        QBtn = QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        self.buttonBox = QtWidgets.QDialogButtonBox(QBtn)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+
+        # Layout
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(QtWidgets.QLabel("Job Name:"))
+        layout.addWidget(self.job_name_edit)
+        layout.addWidget(self.set_output_name_checkbox)
+        layout.addWidget(self.buttonBox)
+        self.setLayout(layout)
+
+    @property
+    def job_name(self):
+        return self.job_name_edit.text().strip()
+
+    @property
+    def use_job_name_for_output(self):
+        return self.set_output_name_checkbox.isChecked()
 
 class LoadingDialog(QtWidgets.QDialog):
     def __init__(self, message="Loading Models, please wait...\nDon't panic if it looks stuck!"):

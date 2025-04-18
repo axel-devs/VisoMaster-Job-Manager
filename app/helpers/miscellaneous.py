@@ -205,16 +205,24 @@ def read_image_file(image_path):
 
     return img  # Return BGR format
 
-def get_output_file_path(original_media_path, output_folder, media_type='video'):
+def get_output_file_path(original_media_path, output_folder, media_type='video', job_name=None, use_job_name_for_output=False):
     date_and_time = datetime.now().strftime(r'%Y_%m_%d_%H_%M_%S')
     input_filename = os.path.basename(original_media_path)
-    # Create a temp Path object to split and merge the original filename to get the new output filename
     temp_path = Path(input_filename)
-    # output_filename = "{0}_{2}{1}".format(temp_path.stem, temp_path.suffix, date_and_time)
-    if media_type=='video':
-        output_filename = f'{temp_path.stem}_{date_and_time}.mp4'
-    elif media_type=='image':
-        output_filename = f'{temp_path.stem}_{date_and_time}.png'
+    if use_job_name_for_output and job_name:
+        if media_type == 'video':
+            output_filename = f'{job_name}.mp4'
+        elif media_type == 'image':
+            output_filename = f'{job_name}.png'
+        else:
+            output_filename = f'{job_name}'
+    else:
+        if media_type=='video':
+            output_filename = f'{temp_path.stem}_{date_and_time}.mp4'
+        elif media_type=='image':
+            output_filename = f'{temp_path.stem}_{date_and_time}.png'
+        else:
+            output_filename = temp_path.name
     output_file_path = os.path.join(output_folder, output_filename)
     return output_file_path
 

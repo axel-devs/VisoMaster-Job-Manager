@@ -10,6 +10,7 @@ from PySide6.QtCore import QThread, Signal
 from PySide6 import QtWidgets
 import numpy as np
 from PySide6.QtWidgets import QInputDialog, QMessageBox
+import threading
 
 from app.ui.widgets.actions import common_actions as common_widget_actions
 from app.ui.widgets.actions import card_actions
@@ -27,6 +28,9 @@ if TYPE_CHECKING:
 jobs_dir = os.path.join(os.getcwd(), "jobs")
 os.makedirs(jobs_dir, exist_ok=True)  # Ensure the directory exists
 
+# Add a global event for job loading
+job_loaded_event = threading.Event()
+
 def convert_parameters_to_job_type(main_window: "MainWindow", parameters: dict|ParametersTypes, convert_type: dict|misc_helpers.ParametersDict):
     if convert_type==dict:
         parameters = parameters.data
@@ -41,10 +45,10 @@ def convert_markers_to_job_type(main_window: "MainWindow", markers: MarkerTypes,
             marker_data['parameters'][target_face_id] = convert_parameters_to_job_type(main_window, target_parameters, convert_type)
     return markers
 
-def save_job(main_window, job_name: str):
+def save_job(main_window, job_name: str, use_job_name_for_output: bool = True):
     """Saves the current workspace as a job in the 'jobs' directory."""
     data_filename = os.path.join(jobs_dir, f"{job_name}")
-    save_job_workspace(main_window, data_filename)
+    save_job_workspace(main_window, data_filename, use_job_name_for_output)
     print(f"[DEBUG] Job saved: {data_filename}")
 
 def list_jobs():
@@ -78,7 +82,7 @@ def load_job(main_window, job_name: str):
     if not Path(job_file).is_file():
         print(f"[ERROR] Job file not found: {job_file}")
         return
-    load_job_workspace(main_window, job_file)
+    load_job_workspace(main_window, job_name)
     print(f"[DEBUG] Loaded job: {job_file}")
 
 def load_job_workspace(main_window: "MainWindow", job_name: str):
@@ -88,6 +92,9 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
     if not Path(data_filename).is_file():
         print(f"[DEBUG] No valid file found for job: {job_name}."); return
     with open(data_filename, 'r') as data_file: data = json.load(data_file)
+    # Set job name and output flag on main_window for later use
+    main_window.current_job_name = job_name
+    main_window.use_job_name_for_output = data.get('use_job_name_for_output', False)
     list_view_actions.clear_stop_loading_input_media(main_window)
     list_view_actions.clear_stop_loading_target_media(main_window)
     main_window.target_videos = {}
@@ -147,8 +154,9 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
         main_window.current_widget_parameters = misc_helpers.ParametersDict(main_window.current_widget_parameters, main_window.default_parameters)
         common_widget_actions.set_widgets_values_using_face_id_parameters(main_window, face_id=False)
     print(f"[DEBUG] Loaded workspace from: {data_filename}")
+    job_loaded_event.set()
 
-def save_job_workspace(main_window: "MainWindow", job_name: str):
+def save_job_workspace(main_window: "MainWindow", job_name: str, use_job_name_for_output: bool = True):
     print("[DEBUG] Saving job workspace...")
     jobs_dir = os.path.join(os.getcwd(), "jobs"); os.makedirs(jobs_dir, exist_ok=True)
     data_filename = os.path.join(jobs_dir, f"{job_name}.json")
@@ -188,106 +196,12 @@ def save_job_workspace(main_window: "MainWindow", job_name: str):
         'last_input_media_folder_path': main_window.last_input_media_folder_path,
         'loaded_embedding_filename': main_window.loaded_embedding_filename,
         'current_widget_parameters': convert_parameters_to_job_type(main_window, main_window.current_widget_parameters, dict),
-        'swap_faces_enabled': swap_faces_state
+        'swap_faces_enabled': swap_faces_state,
+        'use_job_name_for_output': use_job_name_for_output
     }
     with open(data_filename, 'w') as data_file:
         json.dump(save_data, data_file, indent=4)
     print(f"[DEBUG] Job successfully saved to: {data_filename}")
-
-def process_selected_job(main_window: "MainWindow"):
-    """Placeholder function for processing a selected job."""
-    print("[DEBUG] Selected job processing not implemented yet.")
-    QtWidgets.QMessageBox.information(main_window, "Work in Progress", "Processing a selected job is not implemented yet.")
-
-def start_processing_all_jobs(main_window: "MainWindow"):
-    """Starts processing all jobs in sequence."""
-    print("[DEBUG] Entered start_processing_all_jobs...")
-    # Create and store new JobProcessor instance
-    main_window.job_processor = JobProcessor(main_window)
-    
-    print("[DEBUG] Connecting signals in start_processing_all_jobs...")
-    # Connect the necessary signals
-    main_window.job_processor.load_job_signal.connect(main_window.load_job_by_name)
-    main_window.job_processor.start_recording_signal.connect(main_window.start_recording)
-    main_window.job_processor.job_completed_signal.connect(main_window.refresh_job_list)
-    main_window.job_processor.all_jobs_done_signal.connect(
-        lambda: QtWidgets.QMessageBox.information(
-            main_window, "Job Processing", "All jobs completed."
-        )
-    )
-
-    print("[DEBUG] About to start job_processor thread...")
-    main_window.job_processor.start()
-    print("[DEBUG] Exiting start_processing_all_jobs...")
-
-class JobProcessor(QThread):
-    job_completed_signal = Signal(str)
-    all_jobs_done_signal = Signal()
-    load_job_signal = Signal(str)
-    start_recording_signal = Signal()
-
-    def __init__(self, main_window: "MainWindow"):
-        super().__init__()
-        self.main_window = main_window
-        self.jobs_dir = os.path.join(os.getcwd(), "jobs")
-        self.completed_dir = os.path.join(self.jobs_dir, "completed")
-        self.jobs = list_jobs()
-        self.current_job = None
-
-        if not os.path.exists(self.completed_dir):
-            os.makedirs(self.completed_dir)
-
-    def run(self):
-        print("[DEBUG] Entering JobProcessor.run()...")
-
-        if not self.jobs:
-            print("[DEBUG] No jobs to process. Exiting run().")
-            return
-
-        for job_name in self.jobs:
-            self.current_job = job_name
-            print(f"[DEBUG] Beginning processing on job: {job_name}")
-
-            # 1) Load the job (in main UI thread)
-            print(f"[DEBUG] Emitting load_job_signal('{job_name}')")
-            self.load_job_signal.emit(job_name)
-
-            # 2) Wait 10 seconds to ensure the job workspace has time to load
-            print("[DEBUG] Sleeping 10 seconds to let workspace load...")
-            self.msleep(10_000)
-
-            # 3) Emit signal to start recording
-            print("[DEBUG] Emitting start_recording_signal()")
-            self.start_recording_signal.emit()
-
-            # 4) Wait 1 second so the record button has time to toggle
-            self.msleep(1_000)
-
-            # 5) Now monitor for recording to finish
-            print("[DEBUG] Calling wait_for_recording_to_complete()...")
-            self.wait_for_recording_to_complete()
-
-            # Move the job file to 'completed'
-            job_path = os.path.join(self.jobs_dir, f"{job_name}.json")
-            completed_path = os.path.join(self.completed_dir, f"{job_name}.json")
-
-            if os.path.exists(job_path):
-                shutil.move(job_path, completed_path)
-                print(f"[DEBUG] Moved job '{job_name}' to completed folder.")
-                self.job_completed_signal.emit(job_name)
-            else:
-                print(f"[ERROR] Job file not found: {job_path}. Skipping move operation.")
-
-        print("[DEBUG] Finished processing all jobs, emitting all_jobs_done_signal()")
-        self.all_jobs_done_signal.emit()
-
-    def wait_for_recording_to_complete(self):
-        """Waits until video processing has stopped by monitoring the UI state."""
-        print(f"[DEBUG] wait_for_recording_to_complete() checking self.main_window.video_processor.recording...")
-        while self.main_window.video_processor.recording:
-            print("[DEBUG] Recording in progress... for sleeping 5s.")
-            self.msleep(5000)
-        print(f"[DEBUG] Processing stopped for job: {self.current_job}")
 
 def setup_job_manager_ui(main_window):
     """Initialize UI widgets, connect signals, and refresh the job list for the job manager."""
@@ -298,6 +212,10 @@ def setup_job_manager_ui(main_window):
     main_window.buttonProcessSelected = main_window.findChild(QtWidgets.QPushButton, "buttonProcessSelected")
     main_window.buttonProcessAll = main_window.findChild(QtWidgets.QPushButton, "buttonProcessAll")
     main_window.loadJobButton = main_window.findChild(QtWidgets.QPushButton, "loadJobButton")
+
+    # Enable multi-selection for the job list
+    if main_window.jobQueueList:
+        main_window.jobQueueList.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
 
     # Connect buttons
     if main_window.buttonProcessAll:
@@ -311,13 +229,17 @@ def setup_job_manager_ui(main_window):
     main_window.job_processor = None
 
 def prompt_job_name(main_window):
-    """Prompt user to enter a job name before saving."""
-    job_name, ok = QInputDialog.getText(main_window, "Save Job", "Enter job name:")
-    if ok and job_name.strip():
-        save_job(main_window, job_name.strip())
-        refresh_job_list(main_window)
-    else:
-        QMessageBox.warning(main_window, "Invalid Name", "Job name cannot be empty.")
+    """Prompt user to enter a job name before saving, with option to set output file name."""
+    from app.ui.widgets import widget_components
+    dialog = widget_components.SaveJobDialog(main_window)
+    if dialog.exec() == QtWidgets.QDialog.Accepted:
+        job_name = dialog.job_name
+        use_job_name_for_output = dialog.use_job_name_for_output
+        if job_name:
+            save_job(main_window, job_name, use_job_name_for_output)
+            refresh_job_list(main_window)
+        else:
+            QMessageBox.warning(main_window, "Invalid Name", "Job name cannot be empty.")
 
 def load_job_by_name(main_window, job_name: str):
     print(f"[DEBUG] load_job_by_name() called with job_name='{job_name}'")
@@ -361,3 +283,123 @@ def get_selected_job(main_window):
     """Gets the currently selected job from the job list."""
     selected_item = main_window.jobQueueList.currentItem()
     return selected_item.text() if selected_item else None
+
+def get_selected_jobs(main_window):
+    """Returns a list of selected job names from the job list widget."""
+    selected_items = main_window.jobQueueList.selectedItems()
+    return [item.text() for item in selected_items] if selected_items else []
+
+def process_selected_job(main_window: "MainWindow"):
+    """Process only the selected jobs in the job list."""
+    selected_jobs = get_selected_jobs(main_window)
+    if not selected_jobs:
+        QtWidgets.QMessageBox.warning(main_window, "No Job Selected", "Please select one or more jobs to process.")
+        return
+    print(f"[DEBUG] Processing selected jobs: {selected_jobs}")
+    main_window.job_processor = JobProcessor(main_window, jobs_to_process=selected_jobs)
+    main_window.job_processor.load_job_signal.connect(lambda job_name: load_job_by_name(main_window, job_name))
+    main_window.job_processor.start_recording_signal.connect(lambda: start_recording(main_window))
+    main_window.job_processor.job_completed_signal.connect(lambda: refresh_job_list(main_window))
+    main_window.job_processor.all_jobs_done_signal.connect(
+        lambda: QtWidgets.QMessageBox.information(
+            main_window, "Job Processing", "Selected jobs completed."
+        )
+    )
+    main_window.job_processor.start()
+
+class JobProcessor(QThread):
+    job_completed_signal = Signal(str)
+    all_jobs_done_signal = Signal()
+    load_job_signal = Signal(str)
+    start_recording_signal = Signal()
+
+    def __init__(self, main_window: "MainWindow", jobs_to_process=None):
+        super().__init__()
+        self.main_window = main_window
+        self.jobs_dir = os.path.join(os.getcwd(), "jobs")
+        self.completed_dir = os.path.join(self.jobs_dir, "completed")
+        if jobs_to_process is not None:
+            self.jobs = jobs_to_process
+        else:
+            self.jobs = list_jobs()
+        self.current_job = None
+
+        if not os.path.exists(self.completed_dir):
+            os.makedirs(self.completed_dir)
+
+    def run(self):
+        print("[DEBUG] Entering JobProcessor.run()...")
+
+        if not self.jobs:
+            print("[DEBUG] No jobs to process. Exiting run().")
+            return
+
+        for job_name in self.jobs:
+            self.current_job = job_name
+            print(f"[DEBUG] Beginning processing on job: {job_name}")
+
+            # 1) Load the job (in main UI thread)
+            print(f"[DEBUG] Emitting load_job_signal('{job_name}')")
+            # Clear the event before loading
+            job_loaded_event.clear()
+            self.load_job_signal.emit(job_name)
+
+            # 2) Wait for load_job_workspace to finish
+            job_loaded_event.wait()
+            print("[DEBUG] job_loaded_event received!")
+            #self.msleep(5_000)
+
+            # 3) Emit signal to start recording
+            print("[DEBUG] Emitting start_recording_signal()")
+            self.start_recording_signal.emit()
+
+            # 4) Wait 1 second so the record button has time to toggle
+            self.msleep(1_000)
+
+            # 5) Now monitor for recording to finish
+            print("[DEBUG] Calling wait_for_recording_to_complete()...")
+            self.wait_for_recording_to_complete()
+
+            # Move the job file to 'completed'
+            job_path = os.path.join(self.jobs_dir, f"{job_name}.json")
+            completed_path = os.path.join(self.completed_dir, f"{job_name}.json")
+
+            if os.path.exists(job_path):
+                shutil.move(job_path, completed_path)
+                print(f"[DEBUG] Moved job '{job_name}' to completed folder.")
+                self.job_completed_signal.emit(job_name)
+            else:
+                print(f"[ERROR] Job file not found: {job_path}. Skipping move operation.")
+
+        print("[DEBUG] Finished processing all jobs, emitting all_jobs_done_signal()")
+        self.all_jobs_done_signal.emit()
+
+    def wait_for_recording_to_complete(self):
+        """Waits until video processing has stopped by monitoring the UI state."""
+        print(f"[DEBUG] wait_for_recording_to_complete() checking self.main_window.video_processor.recording...")
+        if self.main_window.video_processor.recording:
+            print("[DEBUG] Recording in progress...")
+        while self.main_window.video_processor.recording:
+            self.msleep(5000)
+        print(f"[DEBUG] Processing stopped for job: {self.current_job}")
+
+def start_processing_all_jobs(main_window: "MainWindow"):
+    """Starts processing all jobs in sequence."""
+    print("[DEBUG] Entered start_processing_all_jobs...")
+    # Create and store new JobProcessor instance
+    main_window.job_processor = JobProcessor(main_window)
+    
+    print("[DEBUG] Connecting signals in start_processing_all_jobs...")
+    # Connect the necessary signals
+    main_window.job_processor.load_job_signal.connect(lambda job_name: load_job_by_name(main_window, job_name))
+    main_window.job_processor.start_recording_signal.connect(lambda: start_recording(main_window))
+    main_window.job_processor.job_completed_signal.connect(lambda: refresh_job_list(main_window))
+    main_window.job_processor.all_jobs_done_signal.connect(
+        lambda: QtWidgets.QMessageBox.information(
+            main_window, "Job Processing", "All jobs completed."
+        )
+    )
+
+    print("[DEBUG] About to start job_processor thread...")
+    main_window.job_processor.start()
+    print("[DEBUG] Exiting start_processing_all_jobs...")
