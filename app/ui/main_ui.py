@@ -207,87 +207,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.tabWidget.setCurrentIndex(0)
         # widget_actions.add_groupbox_and_widgets_from_layout_map(self)
 
-        """Initialize UI widgets, connect signals, and refresh the job list."""
-        self.addJobButton = self.findChild(QtWidgets.QPushButton, "addJobButton")
-        self.deleteJobButton = self.findChild(QtWidgets.QPushButton, "deleteJobButton")
-        self.jobQueueList = self.findChild(QtWidgets.QListWidget, "jobQueueList")
-
-        self.labelProcessJobs = self.findChild(QtWidgets.QLabel, "labelProcessJobs")
-        self.buttonProcessSelected = self.findChild(QtWidgets.QPushButton, "buttonProcessSelected")
-        self.buttonProcessAll = self.findChild(QtWidgets.QPushButton, "buttonProcessAll")
-
-        # Connect buttons
-        if self.buttonProcessAll:
-            self.buttonProcessAll.clicked.connect(lambda: job_manager_actions.start_processing_all_jobs(self))
-
-        if self.buttonProcessSelected:
-            self.buttonProcessSelected.clicked.connect(lambda: job_manager_actions.process_selected_job(self))
-
-        if self.addJobButton and self.deleteJobButton:
-            self.connect_job_manager_signals()
-
-        self.job_processor = None
-        self.jobQueueList.itemSelectionChanged.connect(self.get_selected_job)
-
-        self.refresh_job_list()
-
-    def process_selected_job(self):
-        """Placeholder function for processing a selected job."""
-        QtWidgets.QMessageBox.information(self, "Work in Progress", "Processing a selected job is not implemented yet.")
-
-    def prompt_job_name(self):
-        """Prompt user to enter a job name before saving."""
-        job_name, ok = QInputDialog.getText(self, "Save Job", "Enter job name:")
-
-        if ok and job_name.strip():
-            job_manager_actions.save_job(self, job_name.strip())
-            self.refresh_job_list()
-        else:
-            QMessageBox.warning(self, "Invalid Name", "Job name cannot be empty.")
-
-    def load_job_by_name(self, job_name: str):
-        print(f"[DEBUG] load_job_by_name() called with job_name='{job_name}'")
-        if not job_name:
-            QMessageBox.warning(self, "No Job Name", "No job name provided.")
-            return
-
-        print(f"[DEBUG] About to call job_manager_actions.load_job_workspace for '{job_name}'")
-        job_manager_actions.load_job_workspace(self, job_name)
-        print(f"[DEBUG] load_job_workspace call returned for '{job_name}'")
-
-    def start_recording(self):
-        print("[DEBUG] MainWindow.start_recording() called.")
-        if not self.buttonMediaRecord.isChecked():
-            print("[DEBUG] buttonMediaRecord is not checked; toggling it now...")
-            self.buttonMediaRecord.click()
-        else:
-            print("[DEBUG] Already in recording mode; skipping toggle.")
-
-    def load_job(self):
-        """Loads whichever job is currently selected in the ListWidget."""
-        job_name = self.get_selected_job()
-        if not job_name:
-            QMessageBox.warning(self, "No Job Selected", "Please select a job from the list.")
-            return
-
-        self.load_job_by_name(job_name)
-
-    def connect_job_manager_signals(self):
-        """Connect Job Manager UI buttons to job actions."""
-        self.addJobButton.clicked.connect(self.prompt_job_name)
-        self.deleteJobButton.clicked.connect(lambda: job_manager_actions.delete_job(self))
-        self.loadJobButton.clicked.connect(self.load_job)
-
-    def refresh_job_list(self):
-        """Updates the job queue list with the latest job files."""
-        self.jobQueueList.clear()
-        job_names = job_manager_actions.list_jobs()
-        self.jobQueueList.addItems(job_names)
-
-    def get_selected_job(self):
-        """Gets the currently selected job from the job list."""
-        selected_item = self.jobQueueList.currentItem()
-        return selected_item.text() if selected_item else None
+        # --- Job Manager UI Setup ---
+        job_manager_actions.setup_job_manager_ui(self)
 
     def __init__(self):
         super(MainWindow, self).__init__()

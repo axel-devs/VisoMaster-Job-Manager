@@ -9,6 +9,7 @@ import shutil
 from PySide6.QtCore import QThread, Signal
 from PySide6 import QtWidgets
 import numpy as np
+from PySide6.QtWidgets import QInputDialog, QMessageBox
 
 from app.ui.widgets.actions import common_actions as common_widget_actions
 from app.ui.widgets.actions import card_actions
@@ -65,7 +66,7 @@ def delete_job(main_window: "MainWindow"):
     if os.path.exists(job_file):
         os.remove(job_file)
         print(f"[DEBUG] Job deleted: {job_file}")
-        main_window.refresh_job_list()
+        refresh_job_list(main_window)
         return True
 
     QtWidgets.QMessageBox.warning(main_window, "Job Not Found", f"The job '{job_name}' does not exist.")
@@ -287,3 +288,76 @@ class JobProcessor(QThread):
             print("[DEBUG] Recording in progress... for sleeping 5s.")
             self.msleep(5000)
         print(f"[DEBUG] Processing stopped for job: {self.current_job}")
+
+def setup_job_manager_ui(main_window):
+    """Initialize UI widgets, connect signals, and refresh the job list for the job manager."""
+    main_window.addJobButton = main_window.findChild(QtWidgets.QPushButton, "addJobButton")
+    main_window.deleteJobButton = main_window.findChild(QtWidgets.QPushButton, "deleteJobButton")
+    main_window.jobQueueList = main_window.findChild(QtWidgets.QListWidget, "jobQueueList")
+    main_window.labelProcessJobs = main_window.findChild(QtWidgets.QLabel, "labelProcessJobs")
+    main_window.buttonProcessSelected = main_window.findChild(QtWidgets.QPushButton, "buttonProcessSelected")
+    main_window.buttonProcessAll = main_window.findChild(QtWidgets.QPushButton, "buttonProcessAll")
+    main_window.loadJobButton = main_window.findChild(QtWidgets.QPushButton, "loadJobButton")
+
+    # Connect buttons
+    if main_window.buttonProcessAll:
+        main_window.buttonProcessAll.clicked.connect(lambda: start_processing_all_jobs(main_window))
+    if main_window.buttonProcessSelected:
+        main_window.buttonProcessSelected.clicked.connect(lambda: process_selected_job(main_window))
+    if main_window.addJobButton and main_window.deleteJobButton:
+        connect_job_manager_signals(main_window)
+    main_window.jobQueueList.itemSelectionChanged.connect(lambda: get_selected_job(main_window))
+    refresh_job_list(main_window)
+    main_window.job_processor = None
+
+def prompt_job_name(main_window):
+    """Prompt user to enter a job name before saving."""
+    job_name, ok = QInputDialog.getText(main_window, "Save Job", "Enter job name:")
+    if ok and job_name.strip():
+        save_job(main_window, job_name.strip())
+        refresh_job_list(main_window)
+    else:
+        QMessageBox.warning(main_window, "Invalid Name", "Job name cannot be empty.")
+
+def load_job_by_name(main_window, job_name: str):
+    print(f"[DEBUG] load_job_by_name() called with job_name='{job_name}'")
+    if not job_name:
+        QMessageBox.warning(main_window, "No Job Name", "No job name provided.")
+        return
+    print(f"[DEBUG] About to call load_job_workspace for '{job_name}'")
+    load_job_workspace(main_window, job_name)
+    print(f"[DEBUG] load_job_workspace call returned for '{job_name}'")
+
+def start_recording(main_window):
+    print("[DEBUG] MainWindow.start_recording() called.")
+    if not main_window.buttonMediaRecord.isChecked():
+        print("[DEBUG] buttonMediaRecord is not checked; toggling it now...")
+        main_window.buttonMediaRecord.click()
+    else:
+        print("[DEBUG] Already in recording mode; skipping toggle.")
+
+def load_job(main_window):
+    """Loads whichever job is currently selected in the ListWidget."""
+    job_name = get_selected_job(main_window)
+    if not job_name:
+        QMessageBox.warning(main_window, "No Job Selected", "Please select a job from the list.")
+        return
+    load_job_by_name(main_window, job_name)
+
+def connect_job_manager_signals(main_window):
+    """Connect Job Manager UI buttons to job actions."""
+    main_window.addJobButton.clicked.connect(lambda: prompt_job_name(main_window))
+    main_window.deleteJobButton.clicked.connect(lambda: delete_job(main_window))
+    if main_window.loadJobButton:
+        main_window.loadJobButton.clicked.connect(lambda: load_job(main_window))
+
+def refresh_job_list(main_window):
+    """Updates the job queue list with the latest job files."""
+    main_window.jobQueueList.clear()
+    job_names = list_jobs()
+    main_window.jobQueueList.addItems(job_names)
+
+def get_selected_job(main_window):
+    """Gets the currently selected job from the job list."""
+    selected_item = main_window.jobQueueList.currentItem()
+    return selected_item.text() if selected_item else None
