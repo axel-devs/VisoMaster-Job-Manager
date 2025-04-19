@@ -24,18 +24,16 @@ The idea is you get a workspace ready up to the point right before clicking reco
     -   Video processing (`video_processor.py`, `video_control_actions.py`) and helper modules (`miscellaneous.py`, `common_actions.py`, `models_processor.py`) were updated to support job loading/saving and output naming conventions.
 
 ## How to install
-<ins>**Option 1:** Automatically download and apply the patch</ins> *(Easiest, can merge with compatible mods like [Hans' Experimental mod](https://github.com/asdf31jsa/VisoMaster-Experimental)*)
+<ins>**Option 1:**</ins> *Easiest, can merge with compatible mods like [Hans' Experimental mod](https://github.com/asdf31jsa/VisoMaster-Experimental)*
 1. Place [install_job_manager.py](install_job_manager.py) in your VisoMaster installation directory *(with Start.bat)*
 2. Open a command prompt at the same location and type `python job_manager_installer.py`
 3. The script will ask you to confirm, then download the Job Manager mod and automatically apply the changes to the code for you via Git
 
-<sup>*(If your current VisoMaster install is not compatible for auto-applying, you can overwrite it with the Job Manager version instead)*</sup>
-
-<ins>**Option 2:** Download the custom fork and fresh install</ins> *(Manual install, no other mods being used)*
+<ins>**Option 2:**</ins> *Manual installation, overwrites other mods*
 1. Download the source code from this page, or type `git clone https://github.com/PronPan/VisoMaster-Job-Manager` in a command prompt. 
-2. Open the new folder, continue with standard VisoMaster installation steps like normal.
-*(Or if VisoMaster is already installed)*
 2. Copy the 'app' folder from the downloaded Job Manager directory to your VisoMaster directory. Overwrite all files.
+- *(If VisoMaster is not installed)*
+2. Open the new folder, continue with standard VisoMaster installation steps like normal.
 
 ## How to use
 1. Set up your workspace until you would normally start recording (all source and target faces/embeddings selected, etc.)
