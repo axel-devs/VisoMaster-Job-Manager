@@ -326,8 +326,11 @@ def prompt_job_name(main_window):
 
     # Check for at least one target face
     if not has_target_face:
-        QMessageBox.warning(main_window, "Workspace Not Ready", "Select a target face. Your workspace must be fully ready to record before saving a job.")
-        return
+        reply = QMessageBox.warning(main_window, "Confirm Save", 
+                                    "No target face selected! No face swaps will happen for this job. Proceed anyway?",
+                                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.No:
+            return
 
     # Check OutputMediaFolder is not empty
     output_folder = main_window.control.get('OutputMediaFolder', '').strip() if hasattr(main_window, 'control') else ''
@@ -335,18 +338,22 @@ def prompt_job_name(main_window):
         QMessageBox.warning(main_window, "Workspace Not Ready", "Select an Output Folder. Your workspace must be fully ready to record before saving a job.")
         return
 
-    # For the selected target face, check at least one of assigned_input_faces, assigned_merged_embeddings, or assigned_input_embedding is populated
-    selected_target_face = None
-    if hasattr(main_window, 'selected_target_face_id') and main_window.selected_target_face_id:
-        selected_target_face = main_window.target_faces.get(main_window.selected_target_face_id)
-    elif main_window.target_faces:
-        selected_target_face = list(main_window.target_faces.values())[0]
-    if selected_target_face:
-        has_input_faces = bool(getattr(selected_target_face, 'assigned_input_faces', {})) and any(getattr(selected_target_face, 'assigned_input_faces', {}))
-        has_merged_embeddings = bool(getattr(selected_target_face, 'assigned_merged_embeddings', {})) and any(getattr(selected_target_face, 'assigned_merged_embeddings', {}))
-        has_input_embedding = bool(getattr(selected_target_face, 'assigned_input_embedding', {})) and any(getattr(selected_target_face, 'assigned_input_embedding', {}))
-        if not (has_input_faces or has_merged_embeddings or has_input_embedding):
-            QMessageBox.warning(main_window, "Workspace Not Ready", "Assign input faces or a merged embedding to the selected target face. Your workspace must be fully ready to record before saving a job.")
+    # Check if ANY target face has input faces or embeddings assigned
+    at_least_one_target_has_input = False
+    if main_window.target_faces:
+        for face_id, target_face in main_window.target_faces.items():
+            has_input_faces = bool(getattr(target_face, 'assigned_input_faces', {})) and any(getattr(target_face, 'assigned_input_faces', {}))
+            has_merged_embeddings = bool(getattr(target_face, 'assigned_merged_embeddings', {})) and any(getattr(target_face, 'assigned_merged_embeddings', {}))
+            # assigned_input_embedding is derived so we check the sources
+            if has_input_faces or has_merged_embeddings:
+                at_least_one_target_has_input = True
+                break
+
+    if not at_least_one_target_has_input:
+        reply = QMessageBox.warning(main_window, "Confirm Save", 
+                                    "No input faces or merged embedding assigned to ANY target face! No face swaps will happen for this job. Proceed anyway?",
+                                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.No:
             return
 
     dialog = widget_components.SaveJobDialog(main_window)
