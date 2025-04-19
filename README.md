@@ -1,5 +1,54 @@
+# Job Manager for VisoMaster
 
-# VisoMaster 
+![job-manager-preview](https://github.com/user-attachments/assets/2b21272d-d31e-433f-9a97-d48c919152f1)
+
+This is a custom VisoMaster fork/mod introducing a brand new "job manager" widget, designed to streamline repetitive workflows and enable unattended batch processing. I noticed VisoMaster lacks functionality to "*set it and forget it*" in terms of processing outputs, so this is my solution to that. 
+
+The idea is you get a workspace ready up to the point right before clicking record, but you save it as a "job" instead of processing immediately. This allows you to create a list of jobs (potential videos) and then process them automatically later. In theory, you can simply click the process "All" button and VisoMaster will load a job, record it, and move onto the next without you needing to do anything.
+
+## Mod Features
+-   **Job Management UI**: A dockable "Job Manager" widget provides controls to:
+    -   Save the current workspace state as a "job" (custom workspace .json files) in the new `jobs/` directory.
+    -   Load a previously saved job, restoring the complete workspace in a ready-to-record state.
+    -   View and multi-select saved jobs for batch processing, loading, or deletion.
+    -   Various checks and safeguards to ensure any user-input is valid.
+-   **Batch Processing**:
+    -   Job management and progress tracking is done in a dedicated background thread (`JobProcessor`).
+    -   Each job is loaded one at a time, fully processed, and has its .json file moved to the `jobs/completed/` directory.
+    -   A GUI pop-up notifies you when all jobs are finished processing.
+-   **Output File Naming**:
+    -   When saving a job, you can optionally use the job name as the name of the output file.
+-   **Implementation**:
+    -   Core logic resides in `app/ui/widgets/actions/job_manager_actions.py`.
+    -   UI elements are integrated into the main GUI window (`main_ui.py`, `MainWindow.ui`, `widget_components.py`).
+    -   Video processing (`video_processor.py`, `video_control_actions.py`) and helper modules (`miscellaneous.py`, `common_actions.py`, `models_processor.py`) were updated to support job loading/saving and output naming conventions.
+
+## How to install
+<ins>**Option 1:** Automatically download and apply the patch</ins> *(Easiest, can merge with compatible mods like [Hans' Experimental mod](https://github.com/asdf31jsa/VisoMaster-Experimental)*)
+1. Place [install_job_manager.py](install_job_manager.py) in your VisoMaster installation directory *(with Start.bat)*
+2. Open a command prompt at the same location and type `python job_manager_installer.py`
+3. The script will ask you to confirm, then download the Job Manager mod and automatically apply the changes to the code for you via Git
+
+<sup>*(If your current VisoMaster install is not compatible for auto-applying, you can overwrite it with the Job Manager version instead)*</sup>
+
+<ins>**Option 2:** Download the custom fork and fresh install</ins> *(Manual install, no other mods being used)*
+1. Download the source code from this page, or type `git clone https://github.com/PronPan/VisoMaster-Job-Manager` in a command prompt. 
+2. Open the new folder, continue with standard VisoMaster installation steps like normal.
+*(Or if VisoMaster is already installed)*
+2. Copy the 'app' folder from the downloaded Job Manager directory to your VisoMaster directory. Overwrite all files.
+
+## How to use
+1. Set up your workspace until you would normally start recording (all source and target faces/embeddings selected, etc.)
+2. Click the "Save Job" button in the new job manager widget
+3. Give your job a name, untick the "*Use job name for output file name*" option if desired
+4. Select the job(s) you wish to process and click "Process Selected", or simply click the "Process All" button
+5. Processing begins! A pop-up window will appear when all jobs are complete.
+
+**<ins>Important Note:</ins>**
+
+This initial 0.1 version is still very much a "beta" in my eyes and does *not* implement some of my previously shared improvements for VisoMaster as a whole. Things like the overhaul for asynchronous model loading/thread handling will hopefully be added soon. Meaning **you will see the UI temporarily freeze sometimes**, just like stock VisoMaster. But it *should* load models a bit smoother and reduce the "*Loading...don't panic!*" spam. Still, this is a work-in-progress and I can't guarantee it will function correctly 100% of the time or won't have a couple bugs. The most I've tested is 12 jobs in one batch, ranging from 2-90 minutes using all different kinds of settings. YMMV.
+
+# (Original README) VisoMaster 
 ### VisoMaster is a powerful yet easy-to-use tool for face swapping and editing in images and videos. It utilizes AI to produce natural-looking results with minimal effort, making it ideal for both casual users and professionals.  
 
 ---
