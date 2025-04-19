@@ -11,6 +11,7 @@ from PySide6 import QtWidgets
 import numpy as np
 from PySide6.QtWidgets import QInputDialog, QMessageBox
 import threading
+import re
 
 from app.ui.widgets.actions import common_actions as common_widget_actions
 from app.ui.widgets.actions import card_actions
@@ -58,49 +59,81 @@ def list_jobs():
     return [f.replace('.json', '') for f in os.listdir(jobs_dir) if f.endswith('.json')]
 
 def delete_job(main_window: "MainWindow"):
-    """Deletes the selected job from the 'jobs' directory."""  
-    selected_item = main_window.jobQueueList.currentItem()
-    if not selected_item:
-        QtWidgets.QMessageBox.warning(main_window, "No Job Selected", "Please select a job to delete.")
+    """Deletes the selected job(s) from the 'jobs' directory after confirmation."""
+    selected_jobs = get_selected_jobs(main_window)
+    if not selected_jobs:
+        QtWidgets.QMessageBox.warning(main_window, "No Job Selected", "Please select one or more jobs to delete.")
         return False
 
-    job_name = selected_item.text()
-    job_file = os.path.join(jobs_dir, f"{job_name}.json")
+    confirm = QtWidgets.QMessageBox.question(
+        main_window,
+        "Confirm Deletion",
+        f"Are you sure you want to delete the selected job{'s' if len(selected_jobs) > 1 else ''}?\n\n" + ", ".join(selected_jobs),
+        QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+    )
+    if confirm != QtWidgets.QMessageBox.Yes:
+        return False
 
-    if os.path.exists(job_file):
-        os.remove(job_file)
-        print(f"[DEBUG] Job deleted: {job_file}")
+    deleted_any = False
+    for job_name in selected_jobs:
+        job_file = os.path.join(jobs_dir, f"{job_name}.json")
+        if os.path.exists(job_file):
+            os.remove(job_file)
+            print(f"[DEBUG] Job deleted: {job_file}")
+            deleted_any = True
+        else:
+            print(f"[DEBUG] Job file not found for deletion: {job_file}")
+    if deleted_any:
         refresh_job_list(main_window)
         return True
+    else:
+        QtWidgets.QMessageBox.warning(main_window, "Job(s) Not Found", "None of the selected jobs exist.")
+        return False
 
-    QtWidgets.QMessageBox.warning(main_window, "Job Not Found", f"The job '{job_name}' does not exist.")
-    return False
-
-def load_job(main_window, job_name: str):
-    """Loads a saved job into VisoMaster."""
-    job_file = os.path.join(jobs_dir, f"{job_name}.json")
-    if not Path(job_file).is_file():
-        print(f"[ERROR] Job file not found: {job_file}")
+def load_job(main_window):
+    """Loads whichever job is currently selected in the ListWidget."""
+    selected_jobs = get_selected_jobs(main_window)
+    if not selected_jobs:
+        QMessageBox.warning(main_window, "No Job Selected", "Please select a job from the list.")
         return
-    load_job_workspace(main_window, job_name)
-    print(f"[DEBUG] Loaded job: {job_file}")
+    if len(selected_jobs) > 1:
+        QMessageBox.warning(main_window, "Multiple Jobs Selected", "You can only load one job at a time. Please select a single job to load.")
+        return
+    job_name = selected_jobs[0]
+    load_job_by_name(main_window, job_name)
 
 def load_job_workspace(main_window: "MainWindow", job_name: str):
+    from app.ui.widgets import widget_components
     print("[DEBUG] Loading job workspace...")
     jobs_dir = os.path.join(os.getcwd(), "jobs"); os.makedirs(jobs_dir, exist_ok=True)
     data_filename = os.path.join(jobs_dir, f"{job_name}.json")
     if not Path(data_filename).is_file():
         print(f"[DEBUG] No valid file found for job: {job_name}."); return
     with open(data_filename, 'r') as data_file: data = json.load(data_file)
+
+    # Define steps for progress
+    steps = [
+        "Target Videos", "Input Faces", "Embeddings", "Target Faces", "Controls", "Swap Faces", "Markers", "Misc Fields", "Finalizing"
+    ]
+    total_steps = len(steps)
+    progress_dialog = widget_components.JobLoadingDialog(total_steps, parent=main_window)
+    progress_dialog.show()
+    QtWidgets.QApplication.processEvents()
+    step_idx = 0
+
     # Set job name and output flag on main_window for later use
     main_window.current_job_name = job_name
     main_window.use_job_name_for_output = data.get('use_job_name_for_output', False)
     list_view_actions.clear_stop_loading_input_media(main_window)
     list_view_actions.clear_stop_loading_target_media(main_window)
     main_window.target_videos = {}
-    card_actions.clear_input_faces(main_window)
-    card_actions.clear_target_faces(main_window)
-    card_actions.clear_merged_embeddings(main_window)
+    if hasattr(main_window, 'selected_video_button'):
+        btn = main_window.selected_video_button
+        if btn and (not hasattr(btn, 'media_id') or btn.media_id not in main_window.target_videos):
+            main_window.selected_video_button = None
+    # Step 1: Target Videos
+    step_idx += 1
+    progress_dialog.update_progress(step_idx, total_steps, steps[step_idx-1])
     target_medias_data = data.get('target_medias_data', [])
     target_medias_files_list, target_media_ids = zip(*[(m['media_path'], m['media_id']) for m in target_medias_data]) if target_medias_data else ([], [])
     main_window.video_loader_worker = ui_workers.TargetMediaLoaderWorker(main_window=main_window, folder_name=False, files_list=target_medias_files_list, media_ids=target_media_ids)
@@ -108,6 +141,10 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
     main_window.video_loader_worker.run()
     selected_media_id = data.get('selected_media_id', False)
     if selected_media_id and main_window.target_videos.get(selected_media_id): main_window.target_videos[selected_media_id].click()
+
+    # Step 2: Input Faces
+    step_idx += 1
+    progress_dialog.update_progress(step_idx, total_steps, steps[step_idx-1])
     input_faces_data = data.get('input_faces_data', {})
     input_media_paths, input_face_ids = zip(*[(f['media_path'], face_id) for face_id, f in input_faces_data.items()]) if input_faces_data else ([], [])
     main_window.input_faces_loader_worker = ui_workers.InputFacesLoaderWorker(main_window=main_window, folder_name=False, files_list=input_media_paths, face_ids=input_face_ids)
@@ -115,9 +152,17 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
     main_window.input_faces_loader_worker.finished.connect(partial(common_widget_actions.refresh_frame, main_window))
     main_window.input_faces_loader_worker.files_list = list(main_window.input_faces_loader_worker.files_list)
     main_window.input_faces_loader_worker.run()
+
+    # Step 3: Embeddings
+    step_idx += 1
+    progress_dialog.update_progress(step_idx, total_steps, steps[step_idx-1])
     for embedding_id, embedding_data in data.get('embeddings_data', {}).items():
         embedding_store = {embed_model: np.array(embed) for embed_model, embed in embedding_data['embedding_store'].items()}
         list_view_actions.create_and_add_embed_button_to_list(main_window, embedding_data['embedding_name'], embedding_store, embedding_id=embedding_id)
+
+    # Step 4: Target Faces
+    step_idx += 1
+    progress_dialog.update_progress(step_idx, total_steps, steps[step_idx-1])
     for face_id, target_face_data in data.get('target_faces_data', {}).items():
         cropped_face = np.array(target_face_data['cropped_face']).astype('uint8')
         pixmap = common_widget_actions.get_pixmap_from_frame(main_window, cropped_face)
@@ -129,17 +174,33 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
         for assigned_id in target_face_data.get('assigned_input_faces', []):
             if assigned_id in main_window.input_faces: main_window.target_faces[face_id].assigned_input_faces[assigned_id] = main_window.input_faces[assigned_id].embedding_store
         main_window.target_faces[face_id].assigned_input_embedding = {embed_model: np.array(embed) for embed_model, embed in target_face_data.get('assigned_input_embedding', {}).items()}
+
+    # Step 5: Controls
+    step_idx += 1
+    progress_dialog.update_progress(step_idx, total_steps, steps[step_idx-1])
     for control_name, control_value in data.get('control', {}).items():
         main_window.control[control_name] = control_value
+
+    # Step 6: Swap Faces
+    step_idx += 1
+    progress_dialog.update_progress(step_idx, total_steps, steps[step_idx-1])
     swap_faces_state = data.get('swap_faces_enabled', True)
     main_window.swapfacesButton.setChecked(swap_faces_state)
     if swap_faces_state:
         video_control_actions.process_swap_faces(main_window)
     print(f"[DEBUG] Swap Faces button state restored: {swap_faces_state}")
+
+    # Step 7: Markers
+    step_idx += 1
+    progress_dialog.update_progress(step_idx, total_steps, steps[step_idx-1])
     video_control_actions.remove_all_markers(main_window)
     data['markers'] = convert_markers_to_job_type(main_window, data.get('markers', {}), misc_helpers.ParametersDict)
     for marker_position, marker_data in data['markers'].items():
         video_control_actions.add_marker(main_window, marker_data['parameters'], marker_data['control'], int(marker_position))
+
+    # Step 8: Misc Fields
+    step_idx += 1
+    progress_dialog.update_progress(step_idx, total_steps, steps[step_idx-1])
     main_window.last_target_media_folder_path = data.get('last_target_media_folder_path', '')
     main_window.last_input_media_folder_path = data.get('last_input_media_folder_path', '')
     main_window.loaded_embedding_filename = data.get('loaded_embedding_filename', '')
@@ -148,12 +209,17 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
     common_widget_actions.create_control(main_window, 'OutputMediaFolder', output_folder)
     main_window.outputFolderLineEdit.setText(output_folder)
     layout_actions.fit_image_to_view_onchange(main_window)
+
+    # Step 9: Finalizing
+    step_idx += 1
+    progress_dialog.update_progress(step_idx, total_steps, steps[step_idx-1])
     if main_window.target_faces: list(main_window.target_faces.values())[0].click()
     else:
         main_window.current_widget_parameters = data.get('current_widget_parameters', main_window.default_parameters.copy())
         main_window.current_widget_parameters = misc_helpers.ParametersDict(main_window.current_widget_parameters, main_window.default_parameters)
         common_widget_actions.set_widgets_values_using_face_id_parameters(main_window, face_id=False)
     print(f"[DEBUG] Loaded workspace from: {data_filename}")
+    progress_dialog.close()
     job_loaded_event.set()
 
 def save_job_workspace(main_window: "MainWindow", job_name: str, use_job_name_for_output: bool = True):
@@ -182,7 +248,7 @@ def save_job_workspace(main_window: "MainWindow", job_name: str, use_job_name_fo
                           for media_id, target_media in main_window.target_videos.items() if not target_media.is_webcam]
     selected_media_id = main_window.selected_video_button.media_id if main_window.selected_video_button else False
     markers = convert_markers_to_job_type(main_window, copy.deepcopy(main_window.markers), dict)
-    swap_faces_state = main_window.swapfacesButton.isChecked()
+    swap_faces_state = True  # Always set to True when saving
     print(f"[DEBUG] Swap Faces button state saved: {swap_faces_state}")
     save_data = {
         'selected_media_id': selected_media_id,
@@ -203,15 +269,34 @@ def save_job_workspace(main_window: "MainWindow", job_name: str, use_job_name_fo
         json.dump(save_data, data_file, indent=4)
     print(f"[DEBUG] Job successfully saved to: {data_filename}")
 
+def update_job_manager_buttons(main_window):
+    """Enable/disable job manager buttons based on selection and job list state."""
+    job_list = main_window.jobQueueList
+    selected_count = len(job_list.selectedItems()) if job_list else 0
+    job_count = job_list.count() if job_list else 0
+
+    # Enable/disable based on selection
+    enable_on_selection = selected_count > 0
+    if hasattr(main_window, 'buttonProcessSelected') and main_window.buttonProcessSelected:
+        main_window.buttonProcessSelected.setEnabled(enable_on_selection)
+    if hasattr(main_window, 'loadJobButton') and main_window.loadJobButton:
+        main_window.loadJobButton.setEnabled(enable_on_selection)
+    if hasattr(main_window, 'deleteJobButton') and main_window.deleteJobButton:
+        main_window.deleteJobButton.setEnabled(enable_on_selection)
+
+    # Enable/disable 'All' based on job list
+    if hasattr(main_window, 'buttonProcessAll') and main_window.buttonProcessAll:
+        main_window.buttonProcessAll.setEnabled(job_count > 0)
+
 def setup_job_manager_ui(main_window):
     """Initialize UI widgets, connect signals, and refresh the job list for the job manager."""
     main_window.addJobButton = main_window.findChild(QtWidgets.QPushButton, "addJobButton")
     main_window.deleteJobButton = main_window.findChild(QtWidgets.QPushButton, "deleteJobButton")
     main_window.jobQueueList = main_window.findChild(QtWidgets.QListWidget, "jobQueueList")
-    main_window.labelProcessJobs = main_window.findChild(QtWidgets.QLabel, "labelProcessJobs")
     main_window.buttonProcessSelected = main_window.findChild(QtWidgets.QPushButton, "buttonProcessSelected")
     main_window.buttonProcessAll = main_window.findChild(QtWidgets.QPushButton, "buttonProcessAll")
     main_window.loadJobButton = main_window.findChild(QtWidgets.QPushButton, "loadJobButton")
+    main_window.refreshJobListButton = main_window.findChild(QtWidgets.QPushButton, "refreshJobListButton")
 
     # Enable multi-selection for the job list
     if main_window.jobQueueList:
@@ -224,22 +309,60 @@ def setup_job_manager_ui(main_window):
         main_window.buttonProcessSelected.clicked.connect(lambda: process_selected_job(main_window))
     if main_window.addJobButton and main_window.deleteJobButton:
         connect_job_manager_signals(main_window)
-    main_window.jobQueueList.itemSelectionChanged.connect(lambda: get_selected_job(main_window))
+    if main_window.refreshJobListButton:
+        main_window.refreshJobListButton.clicked.connect(lambda: refresh_job_list(main_window))
+    main_window.jobQueueList.itemSelectionChanged.connect(lambda: update_job_manager_buttons(main_window))
     refresh_job_list(main_window)
+    update_job_manager_buttons(main_window)
     main_window.job_processor = None
 
 def prompt_job_name(main_window):
     """Prompt user to enter a job name before saving, with option to set output file name."""
     from app.ui.widgets import widget_components
+    # Check for workspace readiness: at least one source/target face or embedding selected
+    has_source_face = bool(getattr(main_window, 'input_faces', {})) and any(getattr(main_window, 'input_faces', {}))
+    has_target_face = bool(getattr(main_window, 'target_faces', {})) and any(getattr(main_window, 'target_faces', {}))
+    has_embedding = bool(getattr(main_window, 'merged_embeddings', {})) and any(getattr(main_window, 'merged_embeddings', {}))
+
+    # Check for at least one target face
+    if not has_target_face:
+        QMessageBox.warning(main_window, "Workspace Not Ready", "Select a target face. Your workspace must be fully ready to record before saving a job.")
+        return
+
+    # Check OutputMediaFolder is not empty
+    output_folder = main_window.control.get('OutputMediaFolder', '').strip() if hasattr(main_window, 'control') else ''
+    if not output_folder:
+        QMessageBox.warning(main_window, "Workspace Not Ready", "Select an Output Folder. Your workspace must be fully ready to record before saving a job.")
+        return
+
+    # For the selected target face, check at least one of assigned_input_faces, assigned_merged_embeddings, or assigned_input_embedding is populated
+    selected_target_face = None
+    if hasattr(main_window, 'selected_target_face_id') and main_window.selected_target_face_id:
+        selected_target_face = main_window.target_faces.get(main_window.selected_target_face_id)
+    elif main_window.target_faces:
+        selected_target_face = list(main_window.target_faces.values())[0]
+    if selected_target_face:
+        has_input_faces = bool(getattr(selected_target_face, 'assigned_input_faces', {})) and any(getattr(selected_target_face, 'assigned_input_faces', {}))
+        has_merged_embeddings = bool(getattr(selected_target_face, 'assigned_merged_embeddings', {})) and any(getattr(selected_target_face, 'assigned_merged_embeddings', {}))
+        has_input_embedding = bool(getattr(selected_target_face, 'assigned_input_embedding', {})) and any(getattr(selected_target_face, 'assigned_input_embedding', {}))
+        if not (has_input_faces or has_merged_embeddings or has_input_embedding):
+            QMessageBox.warning(main_window, "Workspace Not Ready", "Assign input faces or a merged embedding to the selected target face. Your workspace must be fully ready to record before saving a job.")
+            return
+
     dialog = widget_components.SaveJobDialog(main_window)
     if dialog.exec() == QtWidgets.QDialog.Accepted:
         job_name = dialog.job_name
         use_job_name_for_output = dialog.use_job_name_for_output
-        if job_name:
-            save_job(main_window, job_name, use_job_name_for_output)
-            refresh_job_list(main_window)
-        else:
+        # Validate job name for universal filesystem safety (Windows/Linux)
+        # Only allow alphanumeric, dash, underscore, and space
+        if not job_name:
             QMessageBox.warning(main_window, "Invalid Name", "Job name cannot be empty.")
+            return
+        if not re.match(r'^[\w\- ]+$', job_name):
+            QMessageBox.warning(main_window, "Invalid Name", "Job name contains invalid characters. Only letters, numbers, spaces, dashes, and underscores are allowed.")
+            return
+        save_job(main_window, job_name, use_job_name_for_output)
+        refresh_job_list(main_window)
 
 def load_job_by_name(main_window, job_name: str):
     print(f"[DEBUG] load_job_by_name() called with job_name='{job_name}'")
@@ -258,14 +381,6 @@ def start_recording(main_window):
     else:
         print("[DEBUG] Already in recording mode; skipping toggle.")
 
-def load_job(main_window):
-    """Loads whichever job is currently selected in the ListWidget."""
-    job_name = get_selected_job(main_window)
-    if not job_name:
-        QMessageBox.warning(main_window, "No Job Selected", "Please select a job from the list.")
-        return
-    load_job_by_name(main_window, job_name)
-
 def connect_job_manager_signals(main_window):
     """Connect Job Manager UI buttons to job actions."""
     main_window.addJobButton.clicked.connect(lambda: prompt_job_name(main_window))
@@ -278,6 +393,7 @@ def refresh_job_list(main_window):
     main_window.jobQueueList.clear()
     job_names = list_jobs()
     main_window.jobQueueList.addItems(job_names)
+    update_job_manager_buttons(main_window)
 
 def get_selected_job(main_window):
     """Gets the currently selected job from the job list."""

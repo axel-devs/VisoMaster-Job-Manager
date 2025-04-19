@@ -1370,6 +1370,7 @@ class ParameterText(QtWidgets.QLineEdit, ParametersWidget):
 
     def set_value(self, value):
         self.setText(value)
+
 class ParameterResetDefaultButton(QtWidgets.QPushButton):
     def __init__(self, related_widget: ParameterSlider | ParameterDecimalSlider | SelectionBox, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1388,3 +1389,32 @@ class FormGroupBox(QtWidgets.QGroupBox):
         self.main_window = main_window
         self.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Preferred)
         self.setFlat(True)
+
+class JobLoadingDialog(QtWidgets.QDialog):
+    def __init__(self, total_steps, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Loading Job Data...")
+        self.setWindowIcon(QtGui.QIcon(u":/media/media/visomaster_small.png"))
+        self.setWindowFlag(QtCore.Qt.WindowCloseButtonHint, False)
+        self.setModal(True)
+        self.setFixedSize(300, 120)
+
+        self.layout = QtWidgets.QVBoxLayout()
+        self.label = QtWidgets.QLabel("Loading job data...")
+        self.label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.progress_bar = QtWidgets.QProgressBar()
+        self.progress_bar.setRange(0, total_steps)
+        self.progress_bar.setValue(0)
+        self.step_label = QtWidgets.QLabel("")
+        self.step_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        self.layout.addWidget(self.label)
+        self.layout.addWidget(self.progress_bar)
+        self.layout.addWidget(self.step_label)
+        self.setLayout(self.layout)
+
+    def update_progress(self, current, total, step_name):
+        self.progress_bar.setMaximum(total)
+        self.progress_bar.setValue(current)
+        self.step_label.setText(f"{step_name} ({current}/{total})")
+        QtWidgets.QApplication.processEvents()
