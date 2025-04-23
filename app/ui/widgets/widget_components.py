@@ -340,11 +340,12 @@ class TargetFaceCardButton(CardButton):
         self.clicked.connect(self.load_target_face)
 
         # Imposta lo stylesheet solo per questo pulsante
-        # self.setStyleSheet(\"\"\"
-        # CardButton:checked {
-        #     background-color: #555555;
-        #     border: 2px solid #1abc9c;
-        # }\n        # \"\"\")
+        self.setStyleSheet("""
+        CardButton:checked {
+            background-color: #555555;
+            border: 2px solid #1abc9c;
+        }
+        """)
         
         # Set the context menu policy to trigger the custom context menu on right-click
         self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)

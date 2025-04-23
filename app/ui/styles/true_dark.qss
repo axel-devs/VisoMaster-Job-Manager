@@ -279,15 +279,6 @@ QComboBox::drop-down {
     border-bottom-right-radius: 3px;
 }
 
-QComboBox::down-arrow {
-    /* Use a standard Qt icon or specify an image */
-     image: url(PLACEHOLDER_FOR_DOWN_ARROW_ICON.png); /* Replace if you have icons */
-}
-QComboBox::down-arrow:on { /* shift the arrow when popup is open */
-    top: 1px;
-    left: 1px;
-}
-
 QComboBox QAbstractItemView { /* Style for the dropdown list */
     border: 1px solid #363636; /* Darker */
     background-color: #202020; /* Darker */
