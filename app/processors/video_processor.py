@@ -114,8 +114,29 @@ class VideoProcessor(QObject):
             # Check and send the frame to virtualcam, if the option is selected
             self.send_frame_to_virtualcam(frame)
 
+            # --- Job End Frame Check (Moved Here) ---
+            if self.recording and self.main_window.job_end_frame is not None:
+                # Stop *before* writing frame > end_frame
+                if self.next_frame_to_display > self.main_window.job_end_frame:
+                    print(f"Job End Frame ({self.main_window.job_end_frame}) reached. Stopping recording.")
+                    self.stop_processing(stopped_by_end_frame=True)
+                    # We might have popped the frame already, but we prevent writing it and stop.
+                    return 
+            # --- End Job End Frame Check ---
+
             if self.recording:
-                self.recording_sp.stdin.write(frame.tobytes())
+                # Check if stdin is still available before writing
+                if self.recording_sp and self.recording_sp.stdin and not self.recording_sp.stdin.closed:
+                    try:
+                        self.recording_sp.stdin.write(frame.tobytes())
+                    except OSError as e:
+                        print(f"[WARN] Error writing frame {self.next_frame_to_display} to FFmpeg stdin: {e}")
+                        # Optionally stop processing here if writing fails consistently
+                        # self.stop_processing()
+                        # return
+                else:
+                     print(f"[WARN] FFmpeg stdin not available when trying to write frame {self.next_frame_to_display}. Stop might be in progress.")
+
             # Update the widget values using parameters if it is not recording (The updation of actual parameters is already done inside the FrameWorker, this step is to make the changes appear in the widgets)
             if not self.recording:
                 video_control_actions.update_widget_values_from_markers(self.main_window, self.next_frame_to_display)
@@ -167,46 +188,92 @@ class VideoProcessor(QObject):
         self.frame_read_timer = QTimer()
 
         if self.file_type == 'video':
+            if not (self.media_capture and self.media_capture.isOpened()):
+                print("Error: Unable to open the video.")
+                self.processing = False
+                video_control_actions.reset_media_buttons(self.main_window)
+                return
+
+            print("Starting video processing setup...")
+            self.processing = True # Set processing flag early
+            self.start_time = time.perf_counter()
+            self.frames_to_display.clear()
+            self.threads.clear()
+
+            # --- Recording Setup (Seek, Start Time, FFmpeg) ---
+            if self.recording:
+                layout_actions.disable_all_parameters_and_control_widget(self.main_window)
+                
+                # 1. Handle potential seek to start frame
+                start_frame = self.main_window.job_start_frame
+                if start_frame is not None and start_frame >= 0:
+                    print(f"process_video: Recording mode - Seeking to Job Start Frame {start_frame}")
+                    self.current_frame_number = start_frame
+                    self.next_frame_to_display = start_frame
+                    self.media_capture.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+                    self.main_window.videoSeekSlider.blockSignals(True) # Avoid triggering on_change
+                    self.main_window.videoSeekSlider.setValue(start_frame)
+                    self.main_window.videoSeekSlider.blockSignals(False)
+                    # Read the frame at the new position to update view and self.current_frame
+                    ret, frame_bgr = misc_helpers.read_frame(self.media_capture, preview_mode=False)
+                    if ret:
+                        # Ensure BGR frame is contiguous for QPixmap conversion
+                        frame_bgr_cont = numpy.ascontiguousarray(frame_bgr) 
+                        # Convert to RGB and make contiguous for self.current_frame and FFmpeg
+                        frame_rgb_cont = numpy.ascontiguousarray(frame_bgr[..., ::-1]) 
+                        
+                        self.current_frame = frame_rgb_cont # Store RGB for FFmpeg/processing
+                        # Create pixmap *from the BGR contiguous frame* for correct initial display
+                        pixmap = common_widget_actions.get_pixmap_from_frame(self.main_window, frame_bgr_cont)
+                        graphics_view_actions.update_graphics_view(self.main_window, pixmap, start_frame)
+                    else:
+                        print(f"[WARN] Could not read frame after seeking to {start_frame}. FFmpeg might use wrong dimensions.")
+                    # Reset capture to the start frame position, as read_frame advances it
+                    self.media_capture.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+                else:
+                    print("process_video: Recording mode - No valid Job Start Frame, using current position.")
+                    # Ensure self.current_frame is updated if starting from non-zero without seek
+                    if self.current_frame_number != 0 and len(self.current_frame) == 0:
+                         ret, frame = misc_helpers.read_frame(self.media_capture, preview_mode=False)
+                         if ret: self.current_frame = frame[..., ::-1]
+                         self.media_capture.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame_number) # Go back
+
+                # 2. Calculate play_start_time *after* potential seek
+                self.play_start_time = float(self.media_capture.get(cv2.CAP_PROP_POS_FRAMES) / float(self.fps))
+
+                # 3. Create FFmpeg subprocess *after* seek and potential frame read
+                if len(self.current_frame) > 0: # Ensure we have a frame for dimensions
+                    self.create_ffmpeg_subprocess()
+                else:
+                    print("[ERROR] Cannot start FFmpeg subprocess: No current frame data available for dimensions.")
+                    # Handle error - maybe stop processing?
+                    self.stop_processing()
+                    return
+            else:
+                # Not recording, calculate start time normally
+                self.play_start_time = float(self.media_capture.get(cv2.CAP_PROP_POS_FRAMES) / float(self.fps))
+            # --- End Recording Setup ---
+
+            # --- Start Timers ---
             self.frame_display_timer.timeout.connect(self.display_next_frame)
             self.frame_read_timer.timeout.connect(self.process_next_frame)
 
-            if self.media_capture and self.media_capture.isOpened():
-                print("Starting video processing.")
-                if self.recording:
-                    layout_actions.disable_all_parameters_and_control_widget(self.main_window)
-
-                self.start_time = time.perf_counter()
-                self.processing = True
-                self.frames_to_display.clear()
-                self.threads.clear()
-
-                if self.recording:
-                    self.create_ffmpeg_subprocess()
-
-                self.play_start_time = float(self.media_capture.get(cv2.CAP_PROP_POS_FRAMES) / float(self.fps))
-
-                if self.main_window.control['VideoPlaybackCustomFpsToggle']:
-                    fps = self.main_window.control['VideoPlaybackCustomFpsSlider']
-                else:
-                    fps = self.media_capture.get(cv2.CAP_PROP_FPS)
-                
-                interval = 1000 / fps if fps > 0 else 30
-                interval = int(interval * 0.8) #Process 20% faster to offset the frame loading & processing time so the video will be played close to the original fps
-                print(f"Starting frame_read_timer with an interval of {interval} ms.")
-                if self.recording:
-                    self.frame_read_timer.start()
-                    self.frame_display_timer.start()
-                else:
-                    self.frame_read_timer.start(interval)
-                    self.frame_display_timer.start()
-                self.gpu_memory_update_timer.start(5000) #Update GPU memory progressbar every 5 Seconds
-
+            if self.main_window.control['VideoPlaybackCustomFpsToggle']:
+                fps = self.main_window.control['VideoPlaybackCustomFpsSlider']
             else:
-                print("Error: Unable to open the video.")
-                self.processing = False
-                self.frame_read_timer.stop()
-                video_control_actions.set_play_button_icon_to_play(self.main_window)
-        # 
+                fps = self.media_capture.get(cv2.CAP_PROP_FPS)
+            
+            interval = 1000 / fps if fps > 0 else 30
+            interval = int(interval * 0.8) #Process 20% faster to offset the frame loading & processing time so the video will be played close to the original fps
+            print(f"Starting frame_read_timer with an interval of {interval} ms.")
+            if self.recording:
+                self.frame_read_timer.start()
+                self.frame_display_timer.start()
+            else:
+                self.frame_read_timer.start(interval)
+                self.frame_display_timer.start()
+            self.gpu_memory_update_timer.start(5000) #Update GPU memory progressbar every 5 Seconds
+
         elif self.file_type == 'webcam':
             print("Calling process_video() on Webcam stream")
             self.processing = True
@@ -221,11 +288,8 @@ class VideoProcessor(QObject):
             self.frame_display_timer.start()
             self.gpu_memory_update_timer.start(5000) #Update GPU memory progressbar every 5 Seconds
 
-
-
     def process_next_frame(self):
         """Read the next frame and add it to the queue for processing."""
-
         if self.current_frame_number > self.max_frame_number:
             # print("Stopping frame_read_timer as all frames have been read!")
             self.frame_read_timer.stop()
@@ -239,7 +303,6 @@ class VideoProcessor(QObject):
             ret, frame = misc_helpers.read_frame(self.media_capture, preview_mode = not self.recording)
             if ret:
                 frame = frame[..., ::-1]  # Convert BGR to RGB
-                # print(f"Enqueuing frame {self.current_frame_number}")
                 self.frame_queue.put(self.current_frame_number)
                 self.start_frame_worker(self.current_frame_number, frame)
                 self.current_frame_number += 1
@@ -315,7 +378,7 @@ class VideoProcessor(QObject):
                 self.start_frame_worker(self.current_frame_number, frame)
 
     # @misc_helpers.benchmark
-    def stop_processing(self):
+    def stop_processing(self, stopped_by_end_frame=False):
         """Stop video processing and signal completion."""
         if not self.processing:
             # print("Processing not active. No action to perform.")
@@ -347,10 +410,33 @@ class VideoProcessor(QObject):
             self.media_capture.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame_number)
 
             if self.recording and self.file_type=='video':
-                self.recording_sp.stdin.close()
-                self.recording_sp.wait()
+                # Check if subprocess exists before trying to close stdin
+                if self.recording_sp and self.recording_sp.stdin:
+                    try:
+                        self.recording_sp.stdin.close()
+                        self.recording_sp.wait()
+                    except OSError as e:
+                        # Handle potential errors if the pipe is already closed or broken
+                        print(f"[WARN] Error closing/waiting for FFmpeg stdin: {e}")
+                else:
+                    print("[WARN] FFmpeg subprocess not available or stdin already closed during stop_processing.")
 
-            self.play_end_time = float(self.media_capture.get(cv2.CAP_PROP_POS_FRAMES) / float(self.fps))
+            # --- Calculate end time ---
+            if stopped_by_end_frame and self.main_window.job_end_frame is not None:
+                # Use the specified end frame for calculation if stopped by end frame check
+                end_frame_num_for_calc = self.main_window.job_end_frame
+            else:
+                # Fallback: Use current slider position (might be inaccurate if lagging)
+                # Update internal number based on slider before calculation
+                self.current_frame_number = self.main_window.videoSeekSlider.value() 
+                end_frame_num_for_calc = self.current_frame_number 
+
+            # Ensure end frame is at least one frame after start frame number for ffmpeg -ss/-to validity
+            start_frame_num = int(self.play_start_time * self.fps) if self.fps > 0 else 0
+            end_frame_num_for_calc = max(end_frame_num_for_calc, start_frame_num + 1)
+            
+            self.play_end_time = float(end_frame_num_for_calc / float(self.fps)) if self.fps > 0 else self.play_start_time + 0.1 # Avoid division by zero
+            # --- End Calculate end time ---
 
             if self.file_type=='video':
                 if self.recording:
@@ -365,18 +451,37 @@ class VideoProcessor(QObject):
                     )
                     if Path(final_file_path).is_file():
                         os.remove(final_file_path)
-                    print("Adding audio...")
-                    args = ["ffmpeg",
-                            '-hide_banner',
-                            '-loglevel',    'error',
-                            "-i", self.temp_file,
-                            "-ss", str(self.play_start_time), "-to", str(self.play_end_time), "-i",  self.media_path,
-                            "-c",  "copy", # may be c:v
-                            "-map", "0:v:0", "-map", "1:a:0?",
-                            "-shortest",
-                            final_file_path]
-                    subprocess.run(args, check=False) #Add Audio
-                    os.remove(self.temp_file)
+                    
+                    # --- FFmpeg Final Merge --- 
+                    # Ensure end time is strictly greater than start time before attempting merge
+                    if self.play_end_time > self.play_start_time:
+                        print(f"Adding audio... Start: {self.play_start_time:.3f}s, End: {self.play_end_time:.3f}s")
+                        args = ["ffmpeg",
+                                '-hide_banner',
+                                '-loglevel',    'error',
+                                "-i", self.temp_file, # Input video (processed frames)
+                                "-ss", str(self.play_start_time), "-to", str(self.play_end_time), "-i",  self.media_path, # Input audio segment from original
+                                "-c",  "copy", # Copy video codec, copy audio codec
+                                "-map", "0:v:0", "-map", "1:a:0?", # Map video from input 0, audio from input 1 (optional)
+                                "-shortest", # Finish encoding when the shortest input stream ends
+                                final_file_path]
+                        try:
+                            subprocess.run(args, check=True) # Add Audio, check=True to raise error if ffmpeg fails
+                        except subprocess.CalledProcessError as e:
+                            print(f"[ERROR] FFmpeg audio merge failed: {e}")
+                            # Keep temp file for debugging? Or delete?
+                        except FileNotFoundError:
+                            print(f"[ERROR] FFmpeg not found. Ensure it's in your system PATH.")
+                        finally:
+                             # Clean up temp file only if it exists
+                            if os.path.exists(self.temp_file):
+                                os.remove(self.temp_file)
+                    else:
+                        print(f"[WARN] Skipping audio merge: End time ({self.play_end_time:.3f}s) is not after start time ({self.play_start_time:.3f}s). Final file might be missing audio or be empty.")
+                         # Clean up temp file if it exists, as merge was skipped
+                        if os.path.exists(self.temp_file):
+                            os.remove(self.temp_file)
+                    # --- End FFmpeg Final Merge --- 
 
                 self.end_time = time.perf_counter()
                 processing_time = self.end_time - self.start_time

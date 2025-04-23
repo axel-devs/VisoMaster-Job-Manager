@@ -121,12 +121,19 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
     QtWidgets.QApplication.processEvents()
     step_idx = 0
 
-    # Set job name and output flag on main_window for later use
+    # --- Clear previous state --- 
+    # Clear selected video button reference *before* clearing the list/widgets
+    main_window.selected_video_button = None 
+
+    # Clear job name and output flag on main_window for later use
     main_window.current_job_name = job_name
     main_window.use_job_name_for_output = data.get('use_job_name_for_output', False)
     list_view_actions.clear_stop_loading_input_media(main_window)
     list_view_actions.clear_stop_loading_target_media(main_window)
     main_window.target_videos = {}
+    card_actions.clear_input_faces(main_window)
+    card_actions.clear_target_faces(main_window)
+    card_actions.clear_merged_embeddings(main_window)
     if hasattr(main_window, 'selected_video_button'):
         btn = main_window.selected_video_button
         if btn and (not hasattr(btn, 'media_id') or btn.media_id not in main_window.target_videos):
@@ -198,6 +205,10 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
     for marker_position, marker_data in data['markers'].items():
         video_control_actions.add_marker(main_window, marker_data['parameters'], marker_data['control'], int(marker_position))
 
+    # Load job start/end frames
+    main_window.job_start_frame = data.get('job_start_frame', None)
+    main_window.job_end_frame = data.get('job_end_frame', None)
+
     # Step 8: Misc Fields
     step_idx += 1
     progress_dialog.update_progress(step_idx, total_steps, steps[step_idx-1])
@@ -209,17 +220,11 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
     common_widget_actions.create_control(main_window, 'OutputMediaFolder', output_folder)
     main_window.outputFolderLineEdit.setText(output_folder)
     layout_actions.fit_image_to_view_onchange(main_window)
-
-    # Step 9: Finalizing
-    step_idx += 1
-    progress_dialog.update_progress(step_idx, total_steps, steps[step_idx-1])
-    if main_window.target_faces: list(main_window.target_faces.values())[0].click()
-    else:
-        main_window.current_widget_parameters = data.get('current_widget_parameters', main_window.default_parameters.copy())
-        main_window.current_widget_parameters = misc_helpers.ParametersDict(main_window.current_widget_parameters, main_window.default_parameters)
-        common_widget_actions.set_widgets_values_using_face_id_parameters(main_window, face_id=False)
+    common_widget_actions.set_widgets_values_using_face_id_parameters(main_window, face_id=False)
     print(f"[DEBUG] Loaded workspace from: {data_filename}")
     progress_dialog.close()
+    # Update slider visuals after loading everything
+    main_window.videoSeekSlider.update()
     job_loaded_event.set()
 
 def save_job_workspace(main_window: "MainWindow", job_name: str, use_job_name_for_output: bool = True):
@@ -263,7 +268,9 @@ def save_job_workspace(main_window: "MainWindow", job_name: str, use_job_name_fo
         'loaded_embedding_filename': main_window.loaded_embedding_filename,
         'current_widget_parameters': convert_parameters_to_job_type(main_window, main_window.current_widget_parameters, dict),
         'swap_faces_enabled': swap_faces_state,
-        'use_job_name_for_output': use_job_name_for_output
+        'use_job_name_for_output': use_job_name_for_output,
+        'job_start_frame': main_window.job_start_frame,
+        'job_end_frame': main_window.job_end_frame
     }
     with open(data_filename, 'w') as data_file:
         json.dump(save_data, data_file, indent=4)
