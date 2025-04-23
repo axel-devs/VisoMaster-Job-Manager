@@ -9,7 +9,7 @@ if __name__=="__main__":
 
     app = QtWidgets.QApplication(sys.argv)
     app.setStyle(ProxyStyle())
-    with open("app/ui/styles/true_dark_styles.qss", "r") as f:
+    with open("app/ui/styles/true_dark.qss", "r") as f:
         _style = f.read()
         _style = qdarktheme.load_stylesheet(theme='dark', custom_colors={"primary": "#4090a3"})+'\n'+_style
         app.setStyleSheet(_style)

@@ -6,8 +6,8 @@ SETTINGS_LAYOUT_DATA: LayoutDictTypes = {
         'ThemeSelection': {
             'level': 1,
             'label': 'Theme',
-            'options': ['Dark', 'Dark-Blue', 'Light', 'True Dark'],
-            'default': 'True Dark',
+            'options': ['True-Dark', 'Dark', 'Dark-Blue', 'Light', 'Solarized-Dark', 'Solarized-Light', 'Dracula', 'Nord', 'Gruvbox'],
+            'default': 'True-Dark',
             'help': 'Select the theme to be used',
             'exec_function': control_actions.change_theme,
             'exec_function_args': [],
