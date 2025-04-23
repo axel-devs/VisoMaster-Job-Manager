@@ -23,6 +23,17 @@ The idea is you get a workspace ready up to the point right before clicking reco
     -   UI elements are integrated into the main GUI window (`main_ui.py`, `MainWindow.ui`, `widget_components.py`).
     -   Video processing (`video_processor.py`, `video_control_actions.py`) and helper modules (`miscellaneous.py`, `common_actions.py`, `models_processor.py`) were updated to support job loading/saving and output naming conventions.
 
+-   <ins>**v0.2 Update | 04/23 :**</ins>
+    -   Added new frame markers used to set the start and stop points of a recording.
+        -   Applies to jobs OR manual recording. Click the "+" button to use. _(Standard markers are now blue)_
+    -   Six new themes to choose from!
+        -   The default is now True-Dark. Much better themes coming soon.
+    -   Overhauled the install_job_manager.py script
+        -   Properly accounts for [Hans' Experimental mod](https://github.com/asdf31jsa/VisoMaster-Experimental) and presents the option to install it too. 
+        -   It can also now be used to seamlessly apply any updates for both mods. 
+        -   _Compatibility is attempted but never 100% assured. There may be bugs using them together. It will backup your app/ folder as a precaution._
+    -   Plus several other various small fixes and improvements to v0.1!
+
 ## How to install
 <ins>**Option 1:**</ins> *Easiest, can merge with compatible mods like [Hans' Experimental mod](https://github.com/asdf31jsa/VisoMaster-Experimental)*
 1. Place [install_job_manager.py](install_job_manager.py) in your VisoMaster installation directory *(with Start.bat)*
@@ -44,7 +55,7 @@ The idea is you get a workspace ready up to the point right before clicking reco
 
 **<ins>Important Note:</ins>**
 
-This initial 0.1 version is still very much a "beta" in my eyes and does *not* implement some of my previously shared improvements for VisoMaster as a whole. Things like the overhaul for asynchronous model loading/thread handling will hopefully be added soon. Meaning **you will see the UI temporarily freeze sometimes**, just like stock VisoMaster. But it *should* load models a bit smoother and reduce the "*Loading...don't panic!*" spam. Still, this is a work-in-progress and I can't guarantee it will function correctly 100% of the time or won't have a couple bugs. The most I've tested is 12 jobs in one batch, ranging from 2-90 minutes using all different kinds of settings. YMMV.
+The >1.0 versions are still very much in "beta" and do *not* implement some of my previously shared improvements for VisoMaster as a whole. Things like the overhaul for asynchronous model loading/thread handling will hopefully be added soon. Meaning **you will see the UI temporarily freeze sometimes**, just like stock VisoMaster. But it *should* load models a bit smoother and reduce the "*Loading...don't panic!*" spam. Still, this is a work-in-progress and I can't guarantee it will function correctly 100% of the time or won't have a couple bugs. The most I've tested is 12 jobs in one batch, ranging from 2-90 minutes using all different kinds of settings. YMMV.
 
 # (Original README) VisoMaster 
 ### VisoMaster is a powerful yet easy-to-use tool for face swapping and editing in images and videos. It utilizes AI to produce natural-looking results with minimal effort, making it ideal for both casual users and professionals.  
