@@ -213,6 +213,9 @@ def load_saved_workspace(main_window: 'MainWindow', data_filename: str|bool = Fa
             # main_window.videoSeekSlider.setValue(0)
             # video_control_actions.update_widget_values_from_markers(main_window, 0)
 
+            main_window.job_start_frame = data.get('job_start_frame', None)
+            main_window.job_end_frame = data.get('job_end_frame', None)
+
             # Set target media and input faces folder names
             main_window.last_target_media_folder_path = data.get('last_target_media_folder_path','')
             main_window.last_input_media_folder_path = data.get('last_input_media_folder_path','')
@@ -269,7 +272,9 @@ def save_current_workspace(main_window: 'MainWindow', data_filename:str|bool = F
         'last_target_media_folder_path': main_window.last_target_media_folder_path,
         'last_input_media_folder_path': main_window.last_input_media_folder_path,
         'loaded_embedding_filename': main_window.loaded_embedding_filename,
-        'current_widget_parameters': convert_parameters_to_supported_type(main_window, main_window.current_widget_parameters, dict)
+        'current_widget_parameters': convert_parameters_to_supported_type(main_window, main_window.current_widget_parameters, dict),
+        'job_start_frame': main_window.job_start_frame,
+        'job_end_frame': main_window.job_end_frame
     }
     if not data_filename:
         data_filename, _ = QtWidgets.QFileDialog.getSaveFileName(main_window, filter='JSON (*.json)')

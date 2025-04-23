@@ -28,7 +28,7 @@ def change_threads_number(main_window: 'MainWindow', new_threads_number):
 def change_theme(main_window: 'MainWindow', new_theme):
 
     def get_style_data(filename, theme='dark', custom_colors=None):
-        custom_colors = custom_colors or {"primary": "#4facc9"}
+        custom_colors = custom_colors or {"primary": "#4090a3"}
         with open(f"app/ui/styles/{filename}", "r") as f: # pylint: disable=unspecified-encoding
             _style = f.read()
             _style = qdarktheme.load_stylesheet(theme=theme, custom_colors=custom_colors)+'\n'+_style
@@ -44,6 +44,20 @@ def change_theme(main_window: 'MainWindow', new_theme):
 
     elif new_theme == "Dark-Blue":
         _style = get_style_data('dark_styles.qss', 'dark',) + qdarkstyle.load_stylesheet() # Applica lo stile dark-blue 
+
+    elif new_theme == "True-Dark":
+        _style = get_style_data('true_dark.qss', 'dark')
+
+    elif new_theme == "Solarized-Dark":
+        _style = get_style_data('solarized_dark.qss', 'dark')
+    elif new_theme == "Solarized-Light":
+        _style = get_style_data('solarized_light.qss', 'light')
+    elif new_theme == "Dracula":
+        _style = get_style_data('dracula.qss', 'dark')
+    elif new_theme == "Nord":
+        _style = get_style_data('nord.qss', 'dark')
+    elif new_theme == "Gruvbox":
+        _style = get_style_data('gruvbox.qss', 'dark')
 
     app.setStyleSheet(_style)
 

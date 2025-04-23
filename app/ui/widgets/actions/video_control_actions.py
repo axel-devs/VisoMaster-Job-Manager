@@ -7,6 +7,8 @@ import cv2
 import numpy
 from PIL import Image
 from PySide6 import QtGui,QtWidgets,QtCore
+from PySide6.QtCore import QPoint
+from PySide6.QtWidgets import QMenu
 
 if TYPE_CHECKING:
     from app.ui.main_ui import MainWindow
@@ -54,7 +56,7 @@ def set_up_video_seek_slider(main_window: 'MainWindow'):
 
         # Get groove and handle geometry
         groove_rect = style.subControlRect(
-            QtWidgets.QStyle.ComplexControl.CC_Slider, opt, QtWidgets.QStyle.SubControl.SC_SliderGroove
+            QtWidgets.QStyle.ComplexControl.CC_Slider, opt, QtWidgets.QStyle.SubControl.SC_SliderGroove, self
         )
         groove_y = (groove_rect.top() + groove_rect.bottom()) // 2  # Groove's vertical center
         groove_start = groove_rect.left()
@@ -65,11 +67,10 @@ def set_up_video_seek_slider(main_window: 'MainWindow'):
         normalized_value = (self.value() - self.minimum()) / (self.maximum() - self.minimum())
         handle_center_x = groove_start + normalized_value * groove_width
 
-        # Make the handle thinner
-        handle_width = 5  # Fixed width for thin handle
-        handle_height = groove_rect.height()  # Slightly shorter than groove height
+        handle_width = 5
+        handle_height = int(groove_rect.height() * 1.5)
         handle_left_x = handle_center_x - (handle_width // 2)
-        handle_top_y = groove_y - (handle_height // 2)
+        handle_top_y = groove_y - (handle_height // 2) 
 
         # Define the handle rectangle
         handle_rect = QtCore.QRect(
@@ -77,22 +78,43 @@ def set_up_video_seek_slider(main_window: 'MainWindow'):
         )
 
         # Draw the groove
-        painter.setPen(QtGui.QPen(QtGui.QColor("gray"), 3))  # Groove color and thickness
+        painter.setPen(QtGui.QPen(QtGui.QColor("gray"), 3))
         painter.drawLine(groove_start, groove_y, groove_end, groove_y)
 
         # Draw the thin handle
-        painter.setPen(QtGui.QPen(QtGui.QColor("white"), 1))  # Handle border color
-        painter.setBrush(QtGui.QBrush(QtGui.QColor("white")))  # Handle fill color
+        painter.setPen(QtGui.QPen(QtGui.QColor("white"), 1))
+        painter.setBrush(QtGui.QBrush(QtGui.QColor("white")))
         painter.drawRect(handle_rect)
 
-        # Draw markers (if any)
+        # Draw standard markers (if any)
         if self.markers:
-            painter.setPen(QtGui.QPen(QtGui.QColor("#e8483c"), 2))  # Marker color and thickness
+            painter.setPen(QtGui.QPen(QtGui.QColor("#4090a3"), 3))
             for value in sorted(self.markers):
                 # Calculate marker position
                 marker_normalized_value = (value - self.minimum()) / (self.maximum() - self.minimum())
                 marker_x = groove_start + marker_normalized_value * groove_width
-                painter.drawLine(marker_x, groove_rect.top(), marker_x, groove_rect.bottom())
+                vertical_extension = int(groove_rect.height() * 0.5)
+                painter.drawLine(marker_x, groove_rect.top() - vertical_extension, marker_x, groove_rect.bottom() + vertical_extension)
+
+        # Draw Job Start/End Brackets on the groove line
+        painter.setFont(QtGui.QFont('Arial', 16, QtGui.QFont.Bold)) # Increased font size from 12 to 16
+        font_metrics = painter.fontMetrics()
+        bracket_height = font_metrics.height()
+        bracket_y_pos = groove_y + (bracket_height // 4)
+
+        if main_window.job_start_frame is not None:
+            start_normalized_value = (main_window.job_start_frame - self.minimum()) / (self.maximum() - self.minimum())
+            start_x = groove_start + start_normalized_value * groove_width
+            # Draw the green bracket
+            painter.setPen(QtGui.QPen(QtGui.QColor("#4CAF50"), 1)) # Green for start bracket
+            painter.drawText(int(start_x - 4), int(bracket_y_pos), '[') # Adjusted X offset slightly
+
+        if main_window.job_end_frame is not None:
+            end_normalized_value = (main_window.job_end_frame - self.minimum()) / (self.maximum() - self.minimum())
+            end_x = groove_start + end_normalized_value * groove_width
+            # Draw the red bracket
+            painter.setPen(QtGui.QPen(QtGui.QColor("#e8483c"), 1)) # Red for end bracket
+            painter.drawText(int(end_x - 4), int(bracket_y_pos), ']') # Adjusted X offset slightly
 
     main_window.videoSeekSlider.add_marker_and_paint = partial(add_marker_and_paint, main_window.videoSeekSlider)
     main_window.videoSeekSlider.remove_marker_and_paint = partial(remove_marker_and_paint, main_window.videoSeekSlider)
@@ -112,11 +134,26 @@ def add_video_slider_marker(main_window: 'MainWindow'):
         add_marker(main_window, copy.deepcopy(main_window.parameters), main_window.control.copy(), current_position)
 
 def remove_video_slider_marker(main_window: 'MainWindow'):
-    if main_window.selected_video_button.file_type!='video':
+    if not main_window.selected_video_button or main_window.selected_video_button.file_type != 'video':
         common_widget_actions.create_and_show_messagebox(main_window, 'Markers Not Available', 'Markers can only be used for videos!', main_window.videoSeekSlider)
         return
+
     current_position = int(main_window.videoSeekSlider.value())
-    # print("current_position", current_position)
+
+    # Check and remove job start/end markers first
+    if main_window.job_start_frame == current_position:
+        main_window.job_start_frame = None
+        main_window.videoSeekSlider.update()
+        print(f"Job Start Marker Removed from position: {current_position}")
+        return # Marker found and removed
+
+    if main_window.job_end_frame == current_position:
+        main_window.job_end_frame = None
+        main_window.videoSeekSlider.update()
+        print(f"Job End Marker Removed from position: {current_position}")
+        return # Marker found and removed
+
+    # If not a start/end marker, check for standard markers
     if main_window.markers.get(current_position):
         remove_marker(main_window, current_position)
     else:
@@ -145,12 +182,24 @@ def move_slider_to_nearest_marker(main_window: 'MainWindow', direction: str):
     """
     new_position = None
     current_position = int(main_window.videoSeekSlider.value())
-    markers = sorted(main_window.markers.keys())
+    
+    # Combine standard markers with job start/end markers
+    all_markers = set(main_window.markers.keys())
+    if main_window.job_start_frame is not None:
+        all_markers.add(main_window.job_start_frame)
+    if main_window.job_end_frame is not None:
+        all_markers.add(main_window.job_end_frame)
+
+    if not all_markers:
+        return # No markers to navigate to
+
+    sorted_markers = sorted(list(all_markers))
+
     if direction == "next":
-        filtered_markers = [marker for marker in markers if marker > current_position]
+        filtered_markers = [marker for marker in sorted_markers if marker > current_position]
         new_position = filtered_markers[0] if filtered_markers else None
     elif direction == "previous":
-        filtered_markers = [marker for marker in markers if marker < current_position]
+        filtered_markers = [marker for marker in sorted_markers if marker < current_position]
         new_position = filtered_markers[-1] if filtered_markers else None
 
     if new_position is not None:
@@ -330,32 +379,48 @@ def record_video(main_window: 'MainWindow', checked: bool):
         main_window.buttonMediaRecord.blockSignals(False)
         return
     
-    if checked:
-        if video_processor.processing or video_processor.current_frame_number==video_processor.max_frame_number:
-            print("record_video: Video already playing. Stopping the current video before starting a new one.")
+    if checked: # Start Recording Request
+        # Perform checks first
+        if video_processor.processing:
+             # If already playing/processing, stop it first before starting recording
+            print("record_video: Video already playing. Stopping the current video before starting recording.")
             video_processor.stop_processing()
-            return
+            # We might need a slight delay here, or rely on stop_processing to fully reset before play is triggered
+            # For now, let's assume stop_processing is synchronous enough
+
         if not main_window.control.get('OutputMediaFolder','').strip():
             common_widget_actions.create_and_show_messagebox(main_window, 'No Output Folder Selected','Please select an Output folder to save the Videos before recording!', main_window)
-            main_window.buttonMediaRecord.setChecked(False)
+            main_window.buttonMediaRecord.setChecked(False) # Uncheck the button
             return
         if not misc_helpers.is_ffmpeg_in_path():
             common_widget_actions.create_and_show_messagebox(main_window, 'FFMPEG Not Found','FFMPEG was not found in your system. Check your installation!', main_window)
-            main_window.buttonMediaRecord.setChecked(False)
+            main_window.buttonMediaRecord.setChecked(False) # Uncheck the button
             return
+            
+        # Set the recording flag and icon
+        print("Record button pressed: Setting recording flag.")
         video_processor.recording = True
-        main_window.buttonMediaPlay.setChecked(True)
         set_record_button_icon_to_stop(main_window)
 
-    else:
-        main_window.buttonMediaPlay.setChecked(False)
-        video_processor.stop_processing()
+        # Trigger the play action to start the processing loop (which will handle seeking)
+        main_window.buttonMediaPlay.setChecked(True)
+
+    else: # Stop Recording Request (checked is False)
+        print("Record button released: Stopping video processing.")
+        # The play button checking logic might also call stop_processing, 
+        # but calling it here ensures it stops if the record button is the primary stop trigger.
+        video_processor.stop_processing() 
+        # Ensure play button is also visually stopped
+        if main_window.buttonMediaPlay.isChecked():
+             main_window.buttonMediaPlay.setChecked(False)
+        # Reset icons
         set_play_button_icon_to_play(main_window)
         set_record_button_icon_to_play(main_window)
 
 def set_record_button_icon_to_play(main_window: 'MainWindow'):
     main_window.buttonMediaRecord.setIcon(QtGui.QIcon(":/media/media/rec_off.png"))
     main_window.buttonMediaRecord.setToolTip("Start Recording")
+
 def set_record_button_icon_to_stop(main_window: 'MainWindow'):
     main_window.buttonMediaRecord.setIcon(QtGui.QIcon(":/media/media/rec_on.png"))
     main_window.buttonMediaRecord.setToolTip("Stop Recording")
@@ -482,3 +547,72 @@ def save_current_frame_to_file(main_window: 'MainWindow'):
 
     else:
         common_widget_actions.create_and_show_messagebox(main_window, 'Invalid Frame', 'Cannot save the current frame!', parent_widget=main_window.saveImageButton)
+
+# --- New functions for Job Start/End Markers ---
+
+def show_add_marker_menu(main_window: 'MainWindow'):
+    """Shows a context menu for adding different types of markers."""
+    if not main_window.selected_video_button or main_window.selected_video_button.file_type != 'video':
+        common_widget_actions.create_and_show_messagebox(main_window, 'Markers Not Available', 'Markers can only be used for videos!', main_window.videoSeekSlider)
+        return
+
+    button = main_window.addMarkerButton
+    menu = QMenu(main_window)
+
+    # Action for standard marker
+    add_standard_action = menu.addAction("Add Standard Marker")
+    add_standard_action.triggered.connect(lambda: add_video_slider_marker(main_window))
+
+    menu.addSeparator()
+
+    # Action for job start marker
+    set_start_action = menu.addAction("Add Record Start Marker")
+    set_start_action.triggered.connect(lambda: set_job_start_frame(main_window))
+    if main_window.job_start_frame is not None:
+        set_start_action.setEnabled(False) # Disable if already set
+
+    # Action for job end marker
+    set_end_action = menu.addAction("Add Record End Marker")
+    set_end_action.triggered.connect(lambda: set_job_end_frame(main_window))
+    if main_window.job_start_frame is None or main_window.job_end_frame is not None:
+        set_end_action.setEnabled(False) # Disable if start not set or end already set
+
+    # Show the menu below the button
+    menu.exec(button.mapToGlobal(QPoint(0, button.height())))
+
+def set_job_start_frame(main_window: 'MainWindow'):
+    """Sets the job start frame marker at the current slider position."""
+    current_pos = int(main_window.videoSeekSlider.value())
+
+    # Validation: Check against end frame if it exists
+    if main_window.job_end_frame is not None and current_pos >= main_window.job_end_frame:
+        QtWidgets.QMessageBox.warning(main_window, "Invalid Position", 
+                                    "Job start frame must be before the job end frame.")
+        return
+
+    main_window.job_start_frame = current_pos
+    main_window.videoSeekSlider.update() # Trigger repaint to show the new marker
+    print(f"Job Start Marker Set at Frame: {current_pos}")
+
+def set_job_end_frame(main_window: 'MainWindow'):
+    """Sets the job end frame marker at the current slider position."""
+    # This action should only be enabled if job_start_frame is not None
+    if main_window.job_start_frame is None:
+        # This check is technically redundant due to menu logic, but good for safety
+        QtWidgets.QMessageBox.critical(main_window, "Error", 
+                                     "Cannot set end frame before setting the start frame.")
+        return
+
+    current_pos = int(main_window.videoSeekSlider.value())
+
+    # Validation: Check against start frame
+    if current_pos <= main_window.job_start_frame:
+        QtWidgets.QMessageBox.warning(main_window, "Invalid Position", 
+                                    "Job end frame must be after the job start frame.")
+        return
+
+    main_window.job_end_frame = current_pos
+    main_window.videoSeekSlider.update() # Trigger repaint to show the new marker
+    print(f"Job End Marker Set at Frame: {current_pos}")
+
+# --- End of new functions ---

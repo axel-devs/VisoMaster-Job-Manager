@@ -76,6 +76,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.parameter_widgets: ParametersWidgetTypes = {}
         self.loaded_embedding_filename: str = ''
         
+        # Start/End frame markers for jobs
+        self.job_start_frame: int | None = None
+        self.job_end_frame: int | None = None
+
         self.last_target_media_folder_path = ''
         self.last_input_media_folder_path = ''
 
@@ -140,7 +144,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.frameAdvanceButton.clicked.connect(partial(video_control_actions.advance_video_slider_by_n_frames, self))
         self.frameRewindButton.clicked.connect(partial(video_control_actions.rewind_video_slider_by_n_frames, self))
 
-        self.addMarkerButton.clicked.connect(partial(video_control_actions.add_video_slider_marker, self))
+        self.addMarkerButton.clicked.connect(partial(video_control_actions.show_add_marker_menu, self))
         self.removeMarkerButton.clicked.connect(partial(video_control_actions.remove_video_slider_marker, self))
         self.nextMarkerButton.clicked.connect(partial(video_control_actions.move_slider_to_next_nearest_marker, self))
         self.previousMarkerButton.clicked.connect(partial(video_control_actions.move_slider_to_previous_nearest_marker, self))

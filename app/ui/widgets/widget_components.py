@@ -106,12 +106,11 @@ class TargetMediaCardButton(CardButton):
         layout.addWidget(text_label)
         self.clicked.connect(self.load_media)
         # Imposta lo stylesheet solo per questo pulsante
-        self.setStyleSheet("""
-        CardButton:checked {
-            background-color: #555555;
-            border: 2px solid #1abc9c;
-        }
-        """)
+        # self.setStyleSheet(\"\"\"
+        # CardButton:checked {
+        #     background-color: #555555;
+        #     border: 2px solid #1abc9c;
+        # }\n        # \"\"\")
 
         # Set the context menu policy to trigger the custom context menu on right-click
         self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -509,12 +508,11 @@ class InputFaceCardButton(CardButton):
         self.clicked.connect(self.load_input_face)
 
         # Imposta lo stylesheet solo per questo pulsante
-        self.setStyleSheet("""
-        CardButton:checked {
-            background-color: #555555;
-            border: 2px solid #1abc9c;
-        }
-        """)
+        # self.setStyleSheet(\"\"\"
+        # CardButton:checked {
+        #     background-color: #555555;
+        #     border: 2px solid #1abc9c;
+        # }\n        # \"\"\")
 
         # Set the context menu policy to trigger the custom context menu on right-click
         self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -644,12 +642,11 @@ class EmbeddingCardButton(CardButton):
         self.clicked.connect(self.load_embedding)
 
         # Imposta lo stylesheet solo per questo pulsante
-        self.setStyleSheet("""
-        CardButton:checked {
-            background-color: #555555;
-            border: 2px solid #1abc9c;
-        }
-        """)
+        # self.setStyleSheet(\"\"\"
+        # CardButton:checked {
+        #     background-color: #555555;
+        #     border: 2px solid #1abc9c;
+        # }\n        # \"\"\")
 
         # Set the context menu policy to trigger the custom context menu on right-click
         self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -922,6 +919,7 @@ class SelectionBox(QtWidgets.QComboBox, ParametersWidget):
 class ToggleButton(QtWidgets.QPushButton, ParametersWidget):
     _circle_position = None
 
+    # Restore original default hardcoded colors
     def __init__(self, bg_color="#000000", circle_color="#ffffff", active_color="#4facc9", default_value=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         ParametersWidget.__init__(self, *args, **kwargs)
@@ -930,6 +928,7 @@ class ToggleButton(QtWidgets.QPushButton, ParametersWidget):
         self.setCursor(QtCore.Qt.PointingHandCursor)
         self.setCheckable(True)
         
+        # Restore assignments
         self._bg_color = bg_color
         self._circle_color = circle_color
         self._active_color = active_color
@@ -971,13 +970,16 @@ class ToggleButton(QtWidgets.QPushButton, ParametersWidget):
         rect = QtCore.QRect(0, 0, self.width(), self.height())
         
         if self.isChecked():
-            p.setBrush(QtGui.QColor(self._active_color))
+            # Restore using self._active_color
+            p.setBrush(QtGui.QColor(self._active_color)) 
             p.drawRoundedRect(0, 0, rect.width(), self.height(), self.height() / 2, self.height() / 2)
         else:
-            p.setBrush(QtGui.QColor(self._bg_color))
+            # Restore using self._bg_color
+            p.setBrush(QtGui.QColor(self._bg_color)) 
             p.drawRoundedRect(0, 0, rect.width(), self.height(), self.height() / 2, self.height() / 2)
         
         # Draw the circle at the animated position
+        # Restore using self._circle_color
         p.setBrush(QtGui.QColor(self._circle_color))
         p.drawEllipse(self._circle_position, 1, 13, 13)
         
