@@ -41,7 +41,7 @@ The idea is you get a workspace ready up to the point right before clicking reco
 3. The script will ask you to confirm, then download the Job Manager mod and automatically apply the changes to the code for you via Git
 
 <ins>**Option 2:**</ins> *Manual installation, overwrites other mods*
-1. Download the ZIP from this GitHub, or open a terminal and run `git clone https://github.com/PronPan/VisoMaster-Job-Manager`o
+1. Download the ZIP from this GitHub, or open a terminal and run `git clone https://github.com/PronPan/VisoMaster-Job-Manager`
 2. Copy the 'app' folder and 'main.py' from the downloaded directory
 3. Paste them in your current VisoMaster install directory, overwriting all files.
 
