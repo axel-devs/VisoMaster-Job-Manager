@@ -57,7 +57,7 @@ The idea is you get a workspace ready up to the point right before clicking reco
 
 The >1.0 versions are still very much in "beta" and do *not* implement some of my previously shared improvements for VisoMaster as a whole. Things like the overhaul for asynchronous model loading/thread handling will hopefully be added soon. Meaning **you will see the UI temporarily freeze sometimes**, just like stock VisoMaster. But it *should* load models a bit smoother and reduce the "*Loading...don't panic!*" spam. Still, this is a work-in-progress and I can't guarantee it will function correctly 100% of the time or won't have a couple bugs. The most I've tested is 12 jobs in one batch, ranging from 2-90 minutes using all different kinds of settings. YMMV.
 
-# (Original README) VisoMaster 
+# (Original README*) VisoMaster 
 ### VisoMaster is a powerful yet easy-to-use tool for face swapping and editing in images and videos. It utilizes AI to produce natural-looking results with minimal effort, making it ideal for both casual users and professionals.  
 
 ---
@@ -106,10 +106,10 @@ Before proceeding, ensure you have the following installed on your system:
 
 ## **Installation Steps**
 
-### **1. Clone the Repository**  
+### **1. Clone the Repository (\*MODIFIED FOR JOB MANAGER)**  
 Open a terminal or command prompt and run:  
 ```sh
-git clone https://github.com/visomaster/VisoMaster.git
+git clone https://github.com/PronPan/VisoMaster-Job-Manager.git
 ```
 ```sh
 cd VisoMaster
