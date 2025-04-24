@@ -34,17 +34,16 @@ The idea is you get a workspace ready up to the point right before clicking reco
         -   _Compatibility is attempted but never 100% assured. There may be bugs using them together. It will backup your app/ folder as a precaution._
     -   Plus several other various small fixes and improvements to v0.1!
 
-## How to install
+## How to install (NOT COMPATIBLE WITH PORTABLE VERSION YET)
 <ins>**Option 1:**</ins> *Easiest, can merge with compatible mods like [Hans' Experimental mod](https://github.com/asdf31jsa/VisoMaster-Experimental)*
 1. Place [install_job_manager.py](install_job_manager.py) in your VisoMaster installation directory *(with Start.bat)*
 2. Open a command prompt at the same location and type `python job_manager_installer.py`
 3. The script will ask you to confirm, then download the Job Manager mod and automatically apply the changes to the code for you via Git
 
 <ins>**Option 2:**</ins> *Manual installation, overwrites other mods*
-1. Download the source code from this page, or type `git clone https://github.com/PronPan/VisoMaster-Job-Manager` in a command prompt. 
-2. Copy the 'app' folder and main.py from the downloaded Job Manager directory to your VisoMaster directory. Overwrite all files.
-- *(If VisoMaster is not installed)*
-2. Open the new folder, continue with standard VisoMaster installation steps like normal.
+1. Download the ZIP from this GitHub, or open a terminal and run `git clone https://github.com/PronPan/VisoMaster-Job-Manager`o
+2. Coppy the 'app' folder and 'main.py' from the downloaded directory
+3. Paste them in your current VisoMaster install directory, overwriting all files.
 
 ## How to use
 1. Set up your workspace until you would normally start recording (all source and target faces/embeddings selected, etc.)
