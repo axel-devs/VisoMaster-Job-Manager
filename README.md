@@ -45,6 +45,8 @@ The idea is you get a workspace ready up to the point right before clicking reco
 2. Coppy the 'app' folder and 'main.py' from the downloaded directory
 3. Paste them in your current VisoMaster install directory, overwriting all files.
 
+OR If needed, there [steps to FULLY fresh install with the mod below](https://github.com/PronPan/VisoMaster-Job-Manager/blob/main/README.md#installation-steps)
+
 ## How to use
 1. Set up your workspace until you would normally start recording (all source and target faces/embeddings selected, etc.)
 2. Click the "Save Job" button in the new job manager widget
