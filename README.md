@@ -112,10 +112,10 @@ Open a terminal or command prompt and run:
 git clone https://github.com/PronPan/VisoMaster-Job-Manager.git
 ```
 ```sh
-cd VisoMaster
+cd VisoMaster-Job-Manager
 ```
 
-### **2. Create and Activate a Conda Environment**  
+### **2. Create and Activate a Conda Environment (\*SKIP THIS IF YOU ALREADY SETUP CONDA)**  
 ```sh
 conda create -n visomaster python=3.10.13 -y
 ```
