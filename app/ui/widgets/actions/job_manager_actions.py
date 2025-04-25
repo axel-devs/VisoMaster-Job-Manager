@@ -152,8 +152,8 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
     step_idx = 0
 
     # --- Clear previous state --- 
-    # Clear selected video button reference *before* clearing the list/widgets
     main_window.selected_video_button = None 
+    main_window.control['AutoSwapToggle'] = False
 
     # Clear job name and output flag on main_window for later use
     main_window.current_job_name = job_name
@@ -246,6 +246,7 @@ def load_job_workspace(main_window: "MainWindow", job_name: str):
     progress_dialog.update_progress(step_idx, total_steps, steps[step_idx-1])
     for control_name, control_value in data.get('control', {}).items():
         main_window.control[control_name] = control_value
+    main_window.control['AutoSwapToggle'] = False #Re-disable this. Probably not needed, doesn't hurt.
 
     # Step 6: Swap Faces
     step_idx += 1
