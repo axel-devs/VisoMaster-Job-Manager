@@ -34,17 +34,18 @@ The idea is you get a workspace ready up to the point right before clicking reco
         -   _Compatibility is attempted but never 100% assured. There may be bugs using them together. It will backup your app/ folder as a precaution._
     -   Plus several other various small fixes and improvements to v0.1!
 
-## How to install
+## How to install (NOT COMPATIBLE WITH PORTABLE VERSION YET)
 <ins>**Option 1:**</ins> *Easiest, can merge with compatible mods like [Hans' Experimental mod](https://github.com/asdf31jsa/VisoMaster-Experimental)*
 1. Place [install_job_manager.py](install_job_manager.py) in your VisoMaster installation directory *(with Start.bat)*
 2. Open a command prompt at the same location and type `python job_manager_installer.py`
 3. The script will ask you to confirm, then download the Job Manager mod and automatically apply the changes to the code for you via Git
 
 <ins>**Option 2:**</ins> *Manual installation, overwrites other mods*
-1. Download the source code from this page, or type `git clone https://github.com/PronPan/VisoMaster-Job-Manager` in a command prompt. 
-2. Copy the 'app' folder from the downloaded Job Manager directory to your VisoMaster directory. Overwrite all files.
-- *(If VisoMaster is not installed)*
-2. Open the new folder, continue with standard VisoMaster installation steps like normal.
+1. Download the ZIP from this GitHub, or open a terminal and run `git clone https://github.com/PronPan/VisoMaster-Job-Manager`
+2. Copy the 'app' folder and 'main.py' from the downloaded directory
+3. Paste them in your current VisoMaster install directory, overwriting all files.
+
+OR If needed, there [steps to FULLY fresh install with the mod below](https://github.com/PronPan/VisoMaster-Job-Manager/blob/main/README.md#installation-steps)
 
 ## How to use
 1. Set up your workspace until you would normally start recording (all source and target faces/embeddings selected, etc.)
@@ -57,7 +58,7 @@ The idea is you get a workspace ready up to the point right before clicking reco
 
 The >1.0 versions are still very much in "beta" and do *not* implement some of my previously shared improvements for VisoMaster as a whole. Things like the overhaul for asynchronous model loading/thread handling will hopefully be added soon. Meaning **you will see the UI temporarily freeze sometimes**, just like stock VisoMaster. But it *should* load models a bit smoother and reduce the "*Loading...don't panic!*" spam. Still, this is a work-in-progress and I can't guarantee it will function correctly 100% of the time or won't have a couple bugs. The most I've tested is 12 jobs in one batch, ranging from 2-90 minutes using all different kinds of settings. YMMV.
 
-# (Original README) VisoMaster 
+# (Original README*) VisoMaster 
 ### VisoMaster is a powerful yet easy-to-use tool for face swapping and editing in images and videos. It utilizes AI to produce natural-looking results with minimal effort, making it ideal for both casual users and professionals.  
 
 ---
@@ -106,16 +107,16 @@ Before proceeding, ensure you have the following installed on your system:
 
 ## **Installation Steps**
 
-### **1. Clone the Repository**  
+### **1. Clone the Repository (\*MODIFIED FOR JOB MANAGER)**  
 Open a terminal or command prompt and run:  
 ```sh
-git clone https://github.com/visomaster/VisoMaster.git
+git clone https://github.com/PronPan/VisoMaster-Job-Manager.git
 ```
 ```sh
-cd VisoMaster
+cd VisoMaster-Job-Manager
 ```
 
-### **2. Create and Activate a Conda Environment**  
+### **2. Create and Activate a Conda Environment (\*SKIP THIS IF YOU ALREADY SETUP CONDA)**  
 ```sh
 conda create -n visomaster python=3.10.13 -y
 ```
