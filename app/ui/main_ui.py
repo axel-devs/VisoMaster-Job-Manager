@@ -45,6 +45,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.input_faces_filter_worker = ui_workers.FilterWorker(main_window=self, search_text='', filter_list='input_faces')
         self.merged_embeddings_filter_worker = ui_workers.FilterWorker(main_window=self, search_text='', filter_list='merged_embeddings')
         self.video_processor = VideoProcessor(self)
+        # Connect the signal to start timers from the main thread
+        self.video_processor.start_segment_timers_signal.connect(self.video_processor._start_timers_from_signal)
         self.models_processor = ModelsProcessor(self)
         self.target_videos: Dict[int, widget_components.TargetMediaCardButton] = {} #Contains button objects of target videos (Set as list instead of single video to support batch processing in future)
         self.target_faces: Dict[int, widget_components.TargetFaceCardButton] = {} #Contains button objects of target faces
@@ -76,9 +78,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.parameter_widgets: ParametersWidgetTypes = {}
         self.loaded_embedding_filename: str = ''
         
-        # Start/End frame markers for jobs
-        self.job_start_frame: int | None = None
-        self.job_end_frame: int | None = None
+        # List of (start_frame, end_frame) tuples for job segments
+        # end_frame can be None if a start marker is set but the end is not yet set.
+        self.job_marker_pairs: list[tuple[int, int | None]] = []
 
         self.last_target_media_folder_path = ''
         self.last_input_media_folder_path = ''
@@ -87,6 +89,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.dfm_models_data = DFM_MODELS_DATA
         # This flag is used to make sure new loaded media is properly fit into the graphics frame on the first load
         self.loading_new_media = False
+        # Flag to indicate if the last attempt to read a frame after seeking failed
+        self.last_seek_read_failed = False
 
         self.gpu_memory_update_signal.connect(partial(common_widget_actions.set_gpu_memory_progressbar_value, self))
         self.placeholder_update_signal.connect(partial(common_widget_actions.update_placeholder_visibility, self))

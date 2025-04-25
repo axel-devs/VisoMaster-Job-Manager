@@ -205,24 +205,33 @@ def read_image_file(image_path):
 
     return img  # Return BGR format
 
-def get_output_file_path(original_media_path, output_folder, media_type='video', job_name=None, use_job_name_for_output=False):
+def get_output_file_path(original_media_path, output_folder, media_type='video', job_name=None, use_job_name_for_output=False, output_file_name=None):
     date_and_time = datetime.now().strftime(r'%Y_%m_%d_%H_%M_%S')
     input_filename = os.path.basename(original_media_path)
     temp_path = Path(input_filename)
-    if use_job_name_for_output and job_name:
-        if media_type == 'video':
-            output_filename = f'{job_name}.mp4'
-        elif media_type == 'image':
-            output_filename = f'{job_name}.png'
-        else:
-            output_filename = f'{job_name}'
+    
+    output_base_name = None
+    # Priority 1: Use specific output_file_name if provided and checkbox is unchecked
+    if not use_job_name_for_output and output_file_name:
+        output_base_name = output_file_name
+    # Priority 2: Use job_name if checkbox is checked
+    elif use_job_name_for_output and job_name:
+        output_base_name = job_name
+    # Priority 3: Fallback to original filename + timestamp
     else:
-        if media_type=='video':
-            output_filename = f'{temp_path.stem}_{date_and_time}.mp4'
-        elif media_type=='image':
-            output_filename = f'{temp_path.stem}_{date_and_time}.png'
-        else:
-            output_filename = temp_path.name
+        output_base_name = f'{temp_path.stem}_{date_and_time}'
+
+    # Determine extension based on media type
+    if media_type == 'video':
+        extension = '.mp4'
+    elif media_type == 'image':
+        extension = '.png' # Defaulting to PNG for images
+    else:
+        # If media type is unknown or None, try to keep original extension or default
+        extension = temp_path.suffix if temp_path.suffix else '' 
+
+    # Combine base name and extension
+    output_filename = f'{output_base_name}{extension}'
     output_file_path = os.path.join(output_folder, output_filename)
     return output_file_path
 

@@ -785,10 +785,16 @@ class SaveJobDialog(QtWidgets.QDialog):
         self.setWindowIcon(QtGui.QIcon(u":/media/media/visomaster_small.png"))
 
         # Widgets
+        self.job_name_label = QtWidgets.QLabel("Job Name:")
         self.job_name_edit = QtWidgets.QLineEdit(self)
         self.job_name_edit.setPlaceholderText("Enter job name")
-        self.set_output_name_checkbox = QtWidgets.QCheckBox("Set output file name to job name", self)
+        
+        self.set_output_name_checkbox = QtWidgets.QCheckBox("Use job name for output file name", self)
         self.set_output_name_checkbox.setChecked(True)
+
+        self.output_name_label = QtWidgets.QLabel("Output File Name:")
+        self.output_name_edit = QtWidgets.QLineEdit(self)
+        self.output_name_edit.setPlaceholderText("Leave blank for default")
 
         # Button box
         QBtn = QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
@@ -798,11 +804,26 @@ class SaveJobDialog(QtWidgets.QDialog):
 
         # Layout
         layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(QtWidgets.QLabel("Job Name:"))
+        layout.addWidget(self.job_name_label)
         layout.addWidget(self.job_name_edit)
         layout.addWidget(self.set_output_name_checkbox)
+        layout.addWidget(self.output_name_label)
+        layout.addWidget(self.output_name_edit)
         layout.addWidget(self.buttonBox)
         self.setLayout(layout)
+
+        # Connect checkbox signal to slot
+        self.set_output_name_checkbox.toggled.connect(self._toggle_output_name_field)
+
+        # Initial state
+        self._toggle_output_name_field(self.set_output_name_checkbox.isChecked())
+
+    def _toggle_output_name_field(self, checked):
+        """Show/hide the output file name field based on checkbox state."""
+        self.output_name_label.setVisible(not checked)
+        self.output_name_edit.setVisible(not checked)
+        # Adjust dialog size hint based on visibility
+        self.adjustSize()
 
     @property
     def job_name(self):
@@ -811,6 +832,14 @@ class SaveJobDialog(QtWidgets.QDialog):
     @property
     def use_job_name_for_output(self):
         return self.set_output_name_checkbox.isChecked()
+
+    @property
+    def output_file_name(self):
+        # Return the output file name only if the checkbox is unchecked and the field is not empty
+        if not self.use_job_name_for_output:
+            name = self.output_name_edit.text().strip()
+            return name if name else None # Return None if empty, job_name will be used
+        return None # Return None if checkbox is checked
 
 class LoadingDialog(QtWidgets.QDialog):
     def __init__(self, message="Loading Models, please wait...\nDon't panic if it looks stuck!"):
