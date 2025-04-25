@@ -247,8 +247,7 @@ SETTINGS_LAYOUT_DATA: LayoutDictTypes = {
             'help': 'Choose the backend based on the Virtual Camera you have set up',
             'parentToggle': 'SendVirtCamFramesEnableToggle',
             'requiredToggleValue': True,
-            'exec_function': control_actions.enable_virtualcam,
-            'exec_funtion_args': [],
+            'exec_function_args': [],
         },
     },
     'Face Recognition': {

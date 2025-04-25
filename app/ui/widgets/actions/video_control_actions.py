@@ -416,10 +416,10 @@ def record_video(main_window: 'MainWindow', checked: bool):
             return
         # --- End Pre-checks ---
 
-        # --- Validate Marker Pairs ---
+        # --- Default Recording vs Segment Recording Logic ---
         marker_pairs = main_window.job_marker_pairs
-        valid_pairs = []
-        if not marker_pairs: # NO MARKERS SET - Record from current position to end
+        if not marker_pairs: # NO MARKERS SET -> Default Recording Style
+            # --- Validate start position for default recording ---
             current_frame = main_window.videoSeekSlider.value()
             max_frame = video_processor.max_frame_number
             if max_frame is None or max_frame <= 0:
@@ -434,10 +434,18 @@ def record_video(main_window: 'MainWindow', checked: bool):
                 )
                 main_window.buttonMediaRecord.setChecked(False)
                 return
-                
-            # Create a single segment from current position to the end
-            valid_pairs = [(current_frame, max_frame)] 
-        else: # Markers ARE set, validate them
+            # --- Proceed with Default Recording ---
+            print("Record button pressed: Starting default recording from current position.")
+            set_record_button_icon_to_stop(main_window)
+            # Disable play button during recording
+            main_window.buttonMediaPlay.setEnabled(False)
+            # No need to disable parameters/controls here, process_video handles it
+            video_processor.recording = True # SET THE FLAG FOR DEFAULT RECORDING
+            video_processor.process_video()  # CALL THE DEFAULT PROCESSOR
+
+        else: # MARKERS ARE SET -> Multi-Segment Recording Style
+            # --- Validate Marker Pairs ---
+            valid_pairs = []
             for i, pair in enumerate(marker_pairs):
                 if pair[1] is None:
                     common_widget_actions.create_and_show_messagebox(main_window, 'Incomplete Segment', f'Marker pair {i+1} ({pair[0]}, None) is incomplete. Please set an End marker.', main_window)
@@ -449,27 +457,28 @@ def record_video(main_window: 'MainWindow', checked: bool):
                     return # Stop if invalid
                 else:
                     valid_pairs.append(pair)
-        # --- End Validation ---
+            # --- End Validation ---
 
-        # Proceed if we have either valid marker pairs OR the generated current-to-end pair
-        if valid_pairs:
-            print(f"Record button pressed: Starting recording for {len(valid_pairs)} segment(s).") # Message now reflects 1 segment for full video
-            set_record_button_icon_to_stop(main_window)
-            # Disable play button during segment recording
-            main_window.buttonMediaPlay.setEnabled(False)
-            layout_actions.disable_all_parameters_and_control_widget(main_window)
-            
-            # --- Check if triggered in a job context ---
-            is_job_context = bool(getattr(main_window, 'current_job_name', None))
-            print(f"[DEBUG] record_video: is_job_context = {is_job_context}")
-            
-            video_processor.start_multi_segment_recording(
-                valid_pairs, 
-                triggered_by_job_manager=is_job_context # Pass True if job name exists
-            )
-        else:
-            print("[WARN] Recording not started due to invalid marker configuration.")
-            # main_window.buttonMediaRecord.setChecked(False) # Handled in validation
+            # Proceed if we have valid marker pairs
+            if valid_pairs:
+                print(f"Record button pressed: Starting multi-segment recording for {len(valid_pairs)} segment(s).")
+                set_record_button_icon_to_stop(main_window)
+                # Disable play button during segment recording
+                main_window.buttonMediaPlay.setEnabled(False)
+                # Disable parameters/controls during multi-segment recording (handled by start_multi_segment)
+                # layout_actions.disable_all_parameters_and_control_widget(main_window) # Removed, handled internally
+
+                # --- Check if triggered in a job context ---
+                is_job_context = bool(getattr(main_window, 'current_job_name', None))
+                print(f"[DEBUG] record_video: is_job_context = {is_job_context}")
+                
+                video_processor.start_multi_segment_recording(
+                    valid_pairs, 
+                    triggered_by_job_manager=is_job_context # Pass True if job name exists
+                )
+            else:
+                print("[WARN] Recording not started due to invalid marker configuration.")
+                # main_window.buttonMediaRecord.setChecked(False) # Handled in validation
 
     else: # Stop Recording Request (checked is False)
         if video_processor.is_processing_segments:

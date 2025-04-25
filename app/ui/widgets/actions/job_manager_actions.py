@@ -559,18 +559,18 @@ class JobProcessor(QThread):
         else:
             self.jobs = list_jobs()
         self.current_job = None
-        self.recording_started_event = threading.Event() # Event to wait for recording start
+        self.processing_started_event = threading.Event() # Event to wait for unified processing start
 
         if not os.path.exists(self.completed_dir):
             os.makedirs(self.completed_dir)
         
-        # Connect to the video processor's signal
-        self.main_window.video_processor.recording_actually_started.connect(self.handle_recording_started)
+        # Connect to the video processor's new unified signal
+        self.main_window.video_processor.processing_started_signal.connect(self.handle_processing_started)
 
     @Slot()
-    def handle_recording_started(self):
-        print("[DEBUG] JobProcessor received recording_actually_started signal.")
-        self.recording_started_event.set()
+    def handle_processing_started(self):
+        print("[DEBUG] JobProcessor received processing_started_signal.")
+        self.processing_started_event.set()
 
     def run(self):
         print("[DEBUG] Entering JobProcessor.run()...")
@@ -598,22 +598,25 @@ class JobProcessor(QThread):
                  continue
             print("[DEBUG] job_loaded_event received!")
 
-            print(f"[DEBUG] Starting recording for job '{job_name}'...")
+            print(f"[DEBUG] Toggling record button for job '{job_name}'...")
             self.main_window.buttonMediaRecord.toggle()
 
-            # Wait for the recording to actually start before checking for completion
-            self.recording_started_event.clear()
-            if not self.recording_started_event.wait(timeout=20): # Wait up to 20 seconds
-                print("[ERROR] Timeout waiting for recording to start signal. Aborting job.")
+            # Wait for processing (either style) to actually start before checking for completion
+            self.processing_started_event.clear()
+            if not self.processing_started_event.wait(timeout=20): # Wait up to 20 seconds
+                print("[ERROR] Timeout waiting for processing to start signal. Aborting job.")
                 # Attempt to toggle off the record button if it got stuck toggled on
                 if self.main_window.buttonMediaRecord.isChecked():
                     print("[WARN] Attempting to toggle record button off due to timeout.")
                     self.main_window.buttonMediaRecord.toggle()
+                # Also attempt to stop any potentially stuck processing
+                print("[WARN] Attempting to stop video processor due to timeout.")
+                self.main_window.video_processor.stop_processing()
                 job_failed = True
                 continue # Skip to next job
                 
-            print("[DEBUG] JobProcessor detected recording started. Proceeding to wait for completion.")
-            self.wait_for_recording_to_complete()
+            print("[DEBUG] JobProcessor detected processing started. Proceeding to wait for completion.")
+            self.wait_for_processing_to_complete()
 
             if not job_failed:
                 job_path = os.path.join(self.jobs_dir, f"{job_name}.json")
@@ -635,12 +638,17 @@ class JobProcessor(QThread):
              print("[DEBUG] One or more jobs failed or were skipped.")
         self.all_jobs_done_signal.emit()
 
-    def wait_for_recording_to_complete(self):
-        """Waits until video processing has stopped by monitoring the processor state."""
-        print(f"[DEBUG] wait_for_recording_to_complete() waiting for self.main_window.video_processor.is_processing_segments to become False...")
-        while self.main_window.video_processor.is_processing_segments:
-            self.msleep(500)
-        print(f"[DEBUG] Segment processing finished (is_processing_segments is False) for job: {self.current_job}")
+    def wait_for_processing_to_complete(self):
+        """Waits until video processing (either style) has stopped by monitoring processor flags."""
+        print(f"[DEBUG] wait_for_processing_to_complete() waiting for processing to finish...")
+        while self.main_window.video_processor.processing:
+            # Check both flags relevant to the two recording modes
+            if not self.main_window.video_processor.is_processing_segments and not self.main_window.video_processor.recording:
+                # If neither recording flag is active, but processing is still True, 
+                # it might be in a cleanup phase. Wait for processing flag itself.
+                pass 
+            self.msleep(500) # Check every 500ms
+        print(f"[DEBUG] Processing finished (processing flag is False) for job: {self.current_job}")
 
 def start_processing_all_jobs(main_window: "MainWindow"):
     """Starts processing all jobs in sequence."""
