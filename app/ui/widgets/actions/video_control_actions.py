@@ -482,16 +482,23 @@ def record_video(main_window: 'MainWindow', checked: bool):
 
     else: # Stop Recording Request (checked is False)
         if video_processor.is_processing_segments:
-            print("Record button released: User requested stop during segment processing.")
-            # Let stop_processing handle the abort and cleanup
-            video_processor.stop_processing()
-            # stop_processing should call reset_media_buttons at the end
+            print("Record button released: User requested stop during segment processing. Finalizing...")
+            # Finalize segment concatenation with segments processed so far
+            video_processor.finalize_segment_concatenation()
+            # Finalization methods should handle resetting buttons/UI, no need to call stop_processing
+        elif video_processor.recording: # Check if default style recording was active
+            print("Record button released: User requested stop during default recording. Finalizing...")
+            # Finalize the default style recording
+            video_processor._finalize_default_style_recording()
+            # Finalization methods should handle resetting buttons/UI
         else:
-             # If stop is pressed but we weren't actually processing segments (e.g., immediate click-off)
-             print("Record button released: No active segment processing to stop.")
-             set_record_button_icon_to_play(main_window)
-             main_window.buttonMediaPlay.setEnabled(True)
-             # Might need to reset other states if applicable
+            # No recording was active (maybe an immediate click-off or already stopped)
+            print("Record button released: No active recording found.")
+            # Ensure UI is in the correct state
+            set_record_button_icon_to_play(main_window)
+            main_window.buttonMediaPlay.setEnabled(True)
+            # Reset buttons just in case state is inconsistent
+            reset_media_buttons(main_window)
 
 def set_record_button_icon_to_play(main_window: 'MainWindow'):
     main_window.buttonMediaRecord.setIcon(QtGui.QIcon(":/media/media/rec_off.png"))

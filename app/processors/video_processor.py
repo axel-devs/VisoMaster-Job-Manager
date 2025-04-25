@@ -1206,6 +1206,28 @@ class VideoProcessor(QObject):
     def finalize_segment_concatenation(self):
         """Concatenates all valid temporary segment files into the final output file."""
         print("--- Finalizing concatenation of segments... ---")
+
+        # --- Gracefully stop current FFmpeg process if active (for early stop) ---
+        if self.recording_sp:
+            segment_num = self.current_segment_index + 1
+            print(f"Finalizing: Stopping active FFmpeg process for segment {segment_num}...")
+            if self.recording_sp.stdin and not self.recording_sp.stdin.closed:
+                try:
+                    self.recording_sp.stdin.close()
+                except OSError as e:
+                    print(f"[WARN] Error closing FFmpeg stdin during early finalization: {e}")
+            try:
+                self.recording_sp.wait(timeout=10) # Wait up to 10 seconds for FFmpeg to finish
+                print(f"FFmpeg subprocess (segment {segment_num}) finished writing.")
+            except subprocess.TimeoutExpired:
+                print(f"[WARN] FFmpeg subprocess (segment {segment_num}) timed out during early finalization, killing.")
+                self.recording_sp.kill()
+                self.recording_sp.wait()
+            except Exception as e:
+                print(f"[ERROR] Error waiting for FFmpeg subprocess during early finalization: {e}")
+            self.recording_sp = None # Ensure it's cleared
+        # --- End graceful stop ---
+
         was_triggered_by_job = self.triggered_by_job_manager # Store flag before reset
 
         # Ensure processing flags are off before finalization

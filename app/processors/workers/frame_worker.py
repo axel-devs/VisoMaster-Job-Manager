@@ -50,28 +50,39 @@ class FrameWorker(threading.Thread):
 
             # Process the frame with model inference
             # print(f"Processing frame {self.frame_number}")
+            output_frame_rgb = None # Frame to be sent via signal (needs to be RGB)
+            frame_for_pixmap = None # Frame to be used for QPixmap (needs to be BGR)
+
             if self.main_window.swapfacesButton.isChecked() or self.main_window.editFacesButton.isChecked() or self.main_window.control['FrameEnhancerEnableToggle']:
-                self.frame = self.process_frame()
+                output_frame_rgb = self.process_frame() # process_frame now returns RGB
+                # Create BGR version for Pixmap
+                frame_for_pixmap = output_frame_rgb[..., ::-1]
             else:
-                # Img must be in BGR format
-                self.frame = self.frame[..., ::-1]  # Swap the channels from RGB to BGR
-            self.frame = np.ascontiguousarray(self.frame)
+                # No processing, input self.frame is RGB
+                output_frame_rgb = self.frame
+                # Create BGR version for Pixmap
+                frame_for_pixmap = output_frame_rgb[..., ::-1]
+
+            frame_for_pixmap = np.ascontiguousarray(frame_for_pixmap)
 
             # Display the frame if processing is still active
-
-            pixmap = common_widget_actions.get_pixmap_from_frame(self.main_window, self.frame)
+            # Use the BGR frame for Pixmap generation
+            pixmap = common_widget_actions.get_pixmap_from_frame(self.main_window, frame_for_pixmap)
 
             # Output processed Webcam frame
+            # Emit the RGB frame via signal
             if self.video_processor.file_type=='webcam' and not self.is_single_frame:
-                self.video_processor.webcam_frame_processed_signal.emit(pixmap, self.frame)
+                self.video_processor.webcam_frame_processed_signal.emit(pixmap, output_frame_rgb)
 
             #Output Video frame (while playing)
+            # Emit the RGB frame via signal
             elif not self.is_single_frame:
-                self.video_processor.frame_processed_signal.emit(self.frame_number, pixmap, self.frame)
+                self.video_processor.frame_processed_signal.emit(self.frame_number, pixmap, output_frame_rgb)
             # Output Image/Video frame (Single frame)
+            # Emit the RGB frame via signal
             else:
                 # print('Emitted single_frame_processed_signal')
-                self.video_processor.single_frame_processed_signal.emit(self.frame_number, pixmap, self.frame)
+                self.video_processor.single_frame_processed_signal.emit(self.frame_number, pixmap, output_frame_rgb)
 
 
             # Mark the frame as done in the queue
@@ -202,7 +213,7 @@ class FrameWorker(threading.Thread):
         img = img.permute(1,2,0)
         img = img.cpu().numpy()
         # RGB to BGR
-        return img[..., ::-1]
+        return img
     
     def keypoints_adjustments(self, kps_5: np.ndarray, parameters: dict) -> np.ndarray:
         # Change the ref points
