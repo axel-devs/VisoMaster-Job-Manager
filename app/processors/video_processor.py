@@ -23,6 +23,7 @@ from app.ui.widgets.actions import common_actions as common_widget_actions
 from app.ui.widgets.actions import video_control_actions
 from app.ui.widgets.actions import layout_actions
 import app.helpers.miscellaneous as misc_helpers
+import warnings
 
 if TYPE_CHECKING:
     from app.ui.main_ui import MainWindow
@@ -290,10 +291,14 @@ class VideoProcessor(QObject):
 
 
         # --- Connect and Start Timers ---
-        try: # Disconnect first to prevent multiple connections if called rapidly
-            self.frame_display_timer.timeout.disconnect(self.display_next_frame)
-            self.frame_read_timer.timeout.disconnect(self.process_next_frame)
-        except (TypeError, RuntimeError): pass # Ignore if not connected
+        # Attempt to disconnect previous timer connections, ignoring runtime warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            try:
+                self.frame_display_timer.timeout.disconnect(self.display_next_frame)
+                self.frame_read_timer.timeout.disconnect(self.process_next_frame)
+            except (TypeError, RuntimeError):
+                pass
         self.frame_display_timer.timeout.connect(self.display_next_frame)
         self.frame_read_timer.timeout.connect(self.process_next_frame)
 
@@ -316,7 +321,7 @@ class VideoProcessor(QObject):
         self.frame_read_timer.start(interval)
         self.frame_display_timer.start(interval) # Start display timer with same interval
         self.gpu_memory_update_timer.start(5000)
-        self.processing_started_signal.emit() # EMIT UNIFIED SIGNAL HERE
+        self.processing_started_signal.emit()  # EMIT UNIFIED SIGNAL HERE
 
     def process_next_frame(self):
         """Read the next frame and enqueue for processing (used by playback and default recording)."""
@@ -579,6 +584,9 @@ class VideoProcessor(QObject):
         gc.collect()
 
         video_control_actions.reset_media_buttons(self.main_window)
+        # Disable virtual camera if active when stopping without ongoing processing
+        try: self.disable_virtualcam()
+        except Exception: pass
         print("Processing aborted and cleaned up.")
         return True # Processing was stopped
 
@@ -820,6 +828,9 @@ class VideoProcessor(QObject):
         gc.collect()
 
         video_control_actions.reset_media_buttons(self.main_window)
+        # Ensure virtual camera is disabled after abort
+        try: self.disable_virtualcam()
+        except Exception: pass
         print("default-style recording finalized.")
 
 
@@ -1378,3 +1389,43 @@ class VideoProcessor(QObject):
         self.segment_temp_dir = None # Reset variable
 
     # --- End Multi-Segment Methods ---
+
+    # Add method to start webcam streaming
+    def process_webcam(self):
+        """Start webcam streaming: read and display frames from webcam."""
+        if self.processing:
+            return
+        if self.file_type != 'webcam':
+            print("process_webcam: Only applicable for webcam input.")
+            return
+        if not (self.media_capture and self.media_capture.isOpened()):
+            print("Error: Unable to open webcam source.")
+            video_control_actions.reset_media_buttons(self.main_window)
+            return
+        self.processing = True
+        self.is_processing_segments = False
+        self.recording = False
+        self.frames_to_display.clear()
+        self.webcam_frames_to_display.queue.clear()
+        with self.frame_queue.mutex:
+            self.frame_queue.queue.clear()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            try:
+                self.frame_read_timer.timeout.disconnect()
+                self.frame_display_timer.timeout.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+        self.frame_read_timer.timeout.connect(self.process_next_webcam_frame)
+        self.frame_display_timer.timeout.connect(self.display_next_webcam_frame)
+        fps = self.media_capture.get(cv2.CAP_PROP_FPS)
+        if fps <= 0:
+            fps = 30
+        self.fps = fps
+        interval = int(1000 / fps) if fps > 0 else 33
+        if interval <= 0:
+            interval = 1
+        self.frame_read_timer.start(interval)
+        self.frame_display_timer.start(interval)
+        self.gpu_memory_update_timer.start(5000)
+        self.processing_started_signal.emit()

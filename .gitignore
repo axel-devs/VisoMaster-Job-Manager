@@ -34,4 +34,6 @@ dependencies/TensorRT/
 *.mp4
 *.jpg
 *.exe
-.thumbnails
+.thumbnails/
+app/ui/core/main_window.py 
+app/ui/core/media_rc.py

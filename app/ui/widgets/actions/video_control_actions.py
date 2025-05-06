@@ -366,8 +366,18 @@ def enable_zoom_and_pan(view: QtWidgets.QGraphicsView):
 
 def play_video(main_window: 'MainWindow', checked: bool):
     video_processor = main_window.video_processor
+    # Handle webcam streaming separately
+    if checked and video_processor.file_type == 'webcam':
+        if video_processor.processing:
+            print("play_video: Webcam already streaming. Stopping the stream before restarting.")
+            video_processor.stop_processing()
+        print("play_video: Starting webcam stream processing.")
+        set_play_button_icon_to_stop(main_window)
+        video_processor.process_webcam()
+        return
     if checked:
-        if video_processor.processing or video_processor.current_frame_number==video_processor.max_frame_number:
+        # Video playback or recording
+        if video_processor.processing or video_processor.current_frame_number == video_processor.max_frame_number:
             print("play_video: Video already playing. Stopping the current video before starting a new one.")
             video_processor.stop_processing()
             return
@@ -376,7 +386,7 @@ def play_video(main_window: 'MainWindow', checked: bool):
         video_processor.process_video()
     else:
         video_processor = main_window.video_processor
-        # print("play_video: Stopping video processing.")
+        # Stop playback or webcam streaming
         set_play_button_icon_to_play(main_window)
         video_processor.stop_processing()
         main_window.buttonMediaRecord.blockSignals(True)
@@ -549,7 +559,6 @@ def set_record_button_icon(main_window: 'MainWindow'):
 # @misc_helpers.benchmark
 @QtCore.Slot(int)
 def on_change_video_seek_slider(main_window: 'MainWindow', new_position=0):
-    # print("Called on_change_video_seek_slider()")
     video_processor = main_window.video_processor
     main_window.last_seek_read_failed = False # Reset flag at the start
 
@@ -569,9 +578,7 @@ def on_change_video_seek_slider(main_window: 'MainWindow', new_position=0):
     # print(f"Slider changed to frame {new_position}. Seeking.") # Removed print
 
     # Seek the video capture object
-    if not video_processor.media_capture.set(cv2.CAP_PROP_POS_FRAMES, seek_position):
-        print(f"[WARN] cv2.VideoCapture.set failed for frame {seek_position}")
-        # Even if set fails, try to read anyway, maybe it landed close enough
+    video_processor.media_capture.set(cv2.CAP_PROP_POS_FRAMES, seek_position)
 
     # Read the frame *after* seeking
     # print(f"Attempting to read frame {seek_position} after seeking...") # Removed print

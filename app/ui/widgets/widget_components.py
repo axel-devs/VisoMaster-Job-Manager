@@ -122,7 +122,10 @@ class TargetMediaCardButton(CardButton):
         main_window = self.main_window
         # Deselect the currently selected video
         if main_window.selected_video_button:
-            main_window.selected_video_button.toggle()  # Deselect the previous video
+            prev_btn = main_window.selected_video_button
+            prev_btn.blockSignals(True)
+            prev_btn.setChecked(False)
+            prev_btn.blockSignals(False)
             main_window.selected_video_button = False
         
         # Stop the current video processing
@@ -152,7 +155,10 @@ class TargetMediaCardButton(CardButton):
         main_window = self.main_window
         # Deselect the currently selected video
         if main_window.selected_video_button:
-            main_window.selected_video_button.toggle()  # Deselect the previous video
+            prev_btn = main_window.selected_video_button
+            prev_btn.blockSignals(True)
+            prev_btn.setChecked(False)
+            prev_btn.blockSignals(False)
             main_window.selected_video_button = False
         
         # Stop the current video processing
