@@ -24,28 +24,49 @@ The idea is you get a workspace ready up to the point right before clicking reco
     -   Video processing (`video_processor.py`, `video_control_actions.py`) and helper modules (`miscellaneous.py`, `common_actions.py`, `models_processor.py`) were updated to support job loading/saving and output naming conventions.
 
 -   <ins>**v0.2 Update | 04/23 :**</ins>
-    -   Added new frame markers used to set the start and stop points of a recording.
+    -   **Added new start/stop frame markers**
         -   Applies to jobs OR manual recording. Click the "+" button to use. _(Standard markers are now blue)_
     -   Six new themes to choose from!
         -   The default is now True-Dark. Much better themes coming soon.
-    -   Overhauled the install_job_manager.py script
+    -   **Overhauled the install_job_manager.py script**
         -   Properly accounts for [Hans' Experimental mod](https://github.com/asdf31jsa/VisoMaster-Experimental) and presents the option to install it too. 
         -   It can also now be used to seamlessly apply any updates for both mods. 
         -   _Compatibility is attempted but never 100% assured. There may be bugs using them together. It will backup your app/ folder as a precaution._
-    -   Plus several other various small fixes and improvements to v0.1!
+    -   **Plus several other various small fixes and improvements to v0.1!**
 
-## How to install (NOT COMPATIBLE WITH PORTABLE VERSION YET)
-<ins>**Option 1:**</ins> *Easiest, can merge with compatible mods like [Hans' Experimental mod](https://github.com/asdf31jsa/VisoMaster-Experimental)*
-1. Place [install_job_manager.py](install_job_manager.py) in your VisoMaster installation directory *(with Start.bat)*
-2. Open a command prompt at the same location and type `python job_manager_installer.py`
-3. The script will ask you to confirm, then download the Job Manager mod and automatically apply the changes to the code for you via Git
+-   <ins>**v0.3 Update | 05/06 :**</ins>
+    - **Segmented Recording**
+        - Massive changes to the video recording pipeline in the backend
+        - You can now use any number of start/end markers to record specific sections of a video in one go
+        - Save a job with these markers, or set the markers and simply click record
+        - Added an option to set the output file name or not when saving a job
+        - Improved UI hangs when a recording begins with start/end markers
+        - Regular recording functionality without start/end markers remains the same
+    **Compatibility With Portable Version**
+        - The `install_job_manager.py` script now properly installs the mod with portable versions
+        - Checks for `install.dat` or `dependencies/Python` and runs `convert_portable_ui_to_py.bat`
+        - Huge thanks to @s.t.a.l.k.e.r2990!
+    **More Install Script + Exp. Mod Compatibility**
+        - Fixes compatibility with @hans0049 #"VisoMaster experimental"  mod  :partying_face: 
+        - Properly cleans up old temp directories
+        - Other various improvements, fallbacks, and safety checks
+    **Fixed Webcam Functionality**
+        - Fully works again (oops)
+        - Small enhancements vs stock VisoMaster
+        - Cam input option should appear every time if enabled
+    **Other Various Fixes and Improvements**
+        - Ensured standard recording uses default naming scheme
+        - Fixed several typos from stock VisoMaster
+        - Clarified startup message
+        - Centered "Load Last Workspace" pop-up buttons
+        - *Added cu128 for RTX 5000 series (still need to follow the guide)*
 
-<ins>**Option 2:**</ins> *Manual installation, overwrites other mods*
-1. Download the ZIP from this GitHub, or open a terminal and run `git clone https://github.com/PronPan/VisoMaster-Job-Manager`
-2. Copy the 'app' folder and 'main.py' from the downloaded directory
-3. Paste them in your current VisoMaster install directory, overwriting all files.
-
-OR If needed, there [steps to FULLY fresh install with the mod below](https://github.com/PronPan/VisoMaster-Job-Manager/blob/main/README.md#installation-steps)
+## Job Manager v0.3 Installation:
+1. Place the above `install_job_manager.py` in your main VisoMaster directory.
+2. Open a terminal there and type `python install_job_manager.py`
+3. Install/continue with Hans' mod if desired
+4. Continue until script completes.
+*If you run into any issues, either let the script overwrite your current directory, or [start with a fresh install using the guide below](https://github.com/axel-devs/VisoMaster-Job-Manager/blob/main/README.md#installation-steps)*
 
 ## How to use
 1. Set up your workspace until you would normally start recording (all source and target faces/embeddings selected, etc.)
@@ -53,6 +74,10 @@ OR If needed, there [steps to FULLY fresh install with the mod below](https://gi
 3. Give your job a name, untick the "*Use job name for output file name*" option if desired
 4. Select the job(s) you wish to process and click "Process Selected", or simply click the "Process All" button
 5. Processing begins! A pop-up window will appear when all jobs are complete.
+
+- Multi-segment recordings can be started by setting multiple pairs of start and end markers.
+
+Enjoy!
 
 **<ins>Important Note:</ins>**
 
