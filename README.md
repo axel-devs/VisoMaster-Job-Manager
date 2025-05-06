@@ -42,19 +42,19 @@ The idea is you get a workspace ready up to the point right before clicking reco
         - Added an option to set the output file name or not when saving a job
         - Improved UI hangs when a recording begins with start/end markers
         - Regular recording functionality without start/end markers remains the same
-    **Compatibility With Portable Version**
+    - **Compatibility With Portable Version**
         - The `install_job_manager.py` script now properly installs the mod with portable versions
         - Checks for `install.dat` or `dependencies/Python` and runs `convert_portable_ui_to_py.bat`
-        - Huge thanks to @s.t.a.l.k.e.r2990!
-    **More Install Script + Exp. Mod Compatibility**
+        - Huge thanks to @s.t.a.l.k.e.r2990 in Discord
+    - **More Install Script + Exp. Mod Compatibility**
         - Fixes compatibility with @hans0049 #"VisoMaster experimental"  mod  :partying_face: 
         - Properly cleans up old temp directories
         - Other various improvements, fallbacks, and safety checks
-    **Fixed Webcam Functionality**
+    - **Fixed Webcam Functionality**
         - Fully works again (oops)
         - Small enhancements vs stock VisoMaster
         - Cam input option should appear every time if enabled
-    **Other Various Fixes and Improvements**
+    - **Other Various Fixes and Improvements**
         - Ensured standard recording uses default naming scheme
         - Fixed several typos from stock VisoMaster
         - Clarified startup message
