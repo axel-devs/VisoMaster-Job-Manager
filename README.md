@@ -39,9 +39,9 @@ The idea is you get a workspace ready up to the point right before clicking reco
 -   <ins>**v0.3 Update | 05/06 :**</ins>
     - **Segmented Recording**
         - Massive changes to the video recording pipeline in the backend
-        - You can now use any number of start/end markers to record specific sections of a video in one go
-        - Save a job with these markers, or set the markers and simply click record
-        - Added an option to set the output file name or not when saving a job
+        - You can now use any number of start/end markers to combine the results of multiple sections into one final output video
+        - Save a job with these markers, or set them and  click record
+        - Added an option to set the output file name when saving a job
         - Improved UI hangs when a recording begins with start/end markers
         - Regular recording functionality without start/end markers remains the same
     - **Compatibility With Portable Version**
