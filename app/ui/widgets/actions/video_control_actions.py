@@ -609,9 +609,19 @@ def on_change_video_seek_slider(main_window: 'MainWindow', new_position=0):
     # print("on_change_video_seek_slider: Finished.") # Removed print
 
 def update_parameters_and_control_from_marker(main_window: 'MainWindow', new_position: int):
-    if main_window.markers.get(new_position):
-        main_window.parameters = copy.deepcopy(main_window.markers[new_position]['parameters'])
-        main_window.control.update(main_window.markers[new_position]['control'].copy())
+    marker_data = main_window.markers.get(new_position)
+    if marker_data:
+        # Load parameters from the marker as a base
+        loaded_marker_params = copy.deepcopy(marker_data['parameters'])
+        main_window.parameters = loaded_marker_params
+        
+        active_target_face_ids = list(main_window.target_faces.keys()) # Get current face IDs
+        for face_id_key in active_target_face_ids:
+            # common_actions.create_parameter_dict_for_face_id handles if face_id already exists
+            common_widget_actions.create_parameter_dict_for_face_id(main_window, face_id_key)
+
+        # Update control settings
+        main_window.control.update(marker_data['control'].copy())
 
 def update_widget_values_from_markers(main_window: 'MainWindow', new_position: int):
     if main_window.markers.get(new_position):
@@ -671,7 +681,10 @@ def save_current_frame_to_file(main_window: 'MainWindow'):
         # save_filename, _ = QtWidgets.QFileDialog.getSaveFileName(main_window, 'Save Frame as Image', f'{save_filename}.png', filter='PNG (*.png)',)
         save_filename = misc_helpers.get_output_file_path(main_window.video_processor.media_path, main_window.control['OutputMediaFolder'], media_type='image')
         if save_filename:
-            pil_image = Image.fromarray(frame[..., ::-1])
+            # frame is main_window.video_processor.current_frame, which is already RGB.
+            # Pillow's Image.fromarray expects RGB for 3-channel arrays by default.
+            # Original: pil_image = Image.fromarray(frame[..., ::-1]) # This converted RGB to BGR, then Pillow misinterpreted BGR as RGB.
+            pil_image = Image.fromarray(frame) # Correct: Pass RGB frame directly to Pillow.
             pil_image.save(save_filename, 'PNG')
             common_widget_actions.create_and_show_toast_message(main_window, 'Image Saved', f'Saved Current Image to file: {save_filename}')
 
