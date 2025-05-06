@@ -49,7 +49,7 @@ The idea is you get a workspace ready up to the point right before clicking reco
         - Checks for `install.dat` or `dependencies/Python` and runs `convert_portable_ui_to_py.bat`
         - Huge thanks to @s.t.a.l.k.e.r2990 in Discord
     - **More Install Script + Exp. Mod Compatibility**
-        - Fixes compatibility with @hans0049 #"VisoMaster experimental"  mod  :partying_face: 
+        - Fixes compatibility with [Hans' Experimental mod](https://github.com/asdf31jsa/VisoMaster-Experimental) 
         - Properly cleans up old temp directories
         - Other various improvements, fallbacks, and safety checks
     - **Fixed Webcam Functionality**
