@@ -1,6 +1,8 @@
 # Job Manager for VisoMaster
 
 ![job-manager-preview](https://github.com/user-attachments/assets/2b21272d-d31e-433f-9a97-d48c919152f1)
+![image](https://github.com/user-attachments/assets/9678e550-692c-4676-b6e3-380cbf6f8156)
+
 
 This is a custom VisoMaster fork/mod introducing a brand new "job manager" widget, designed to streamline repetitive workflows and enable unattended batch processing. I noticed VisoMaster lacks functionality to "*set it and forget it*" in terms of processing outputs, so this is my solution to that. 
 
