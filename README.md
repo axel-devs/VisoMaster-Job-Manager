@@ -61,13 +61,14 @@ The idea is you get a workspace ready up to the point right before clicking reco
         - Fixed several typos from stock VisoMaster
         - Clarified startup message
         - Centered "Load Last Workspace" pop-up buttons
-        - *Added cu128 for RTX 5000 series (still need to follow the guide)*
+        - Added cu128 for RTX 5000 series (still need to follow [the guide](https://discord.com/channels/1278817145924620319/1353234194788126780))
 
 ## Job Manager v0.3 Installation:
 1. Place the above `install_job_manager.py` in your main VisoMaster directory.
 2. Open a terminal there and type `python install_job_manager.py`
 3. Install/continue with Hans' mod if desired
 4. Continue until script completes.
+
 *If you run into any issues, either let the script overwrite your current directory, or [start with a fresh install using the guide below](https://github.com/axel-devs/VisoMaster-Job-Manager/blob/main/README.md#installation-steps)*
 
 ## How to use
