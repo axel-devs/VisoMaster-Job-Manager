@@ -673,8 +673,8 @@ def main():
                  final_exit_code = 1
                  print("\n--- Fallback: Direct Overwrite Needed ---")
                  if hans_mod_installed_or_requested:
-                     debug.print("Automatic patching failed even after preparing Hans' file.")
-                     debug.print("This suggests deeper conflicts or issues.")
+                     print_debug("Automatic patching failed even after preparing Hans' file.")
+                     print_debug("This suggests deeper conflicts or issues.")
                      print("\nTo install Job Manager, a full overwrite of 'app' and 'main.py' is required.")
                      while True:
                          answer_overwrite = input("Overwrite installation with Job Manager files? [y/N]: ").lower().strip()

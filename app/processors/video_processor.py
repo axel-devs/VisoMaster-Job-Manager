@@ -258,6 +258,20 @@ class VideoProcessor(QObject):
         # Ensure multi-segment flag is OFF for this mode
         self.is_processing_segments = False
 
+        # Determine if this default-style recording was initiated by the Job Manager
+        job_mgr_flag = getattr(self.main_window, 'job_manager_initiated_record', False)
+        if self.recording and job_mgr_flag:
+            self.triggered_by_job_manager = True
+            print("[DEBUG] Detected default-style recording initiated by Job Manager.")
+        else:
+            self.triggered_by_job_manager = False
+
+        # Clear the flag so manual recordings won't be affected
+        try:
+            self.main_window.job_manager_initiated_record = False
+        except Exception:
+            pass
+
         if self.recording:
             # Disable UI elements during default style recording
             layout_actions.disable_all_parameters_and_control_widget(self.main_window)
@@ -722,10 +736,20 @@ class VideoProcessor(QObject):
 
         # --- Audio Merging (default logic) ---
         if self.temp_file and os.path.exists(self.temp_file) and os.path.getsize(self.temp_file) > 0:
+            # --- Determine Final Output Path (incorporating job manager settings) ---
+            was_triggered_by_job = getattr(self, 'triggered_by_job_manager', False)
+            job_name = getattr(self.main_window, 'current_job_name', None) if was_triggered_by_job else None
+            use_job_name = getattr(self.main_window, 'use_job_name_for_output', False) if was_triggered_by_job else False
+            output_file_name = getattr(self.main_window, 'output_file_name', None) if was_triggered_by_job else None
+            # DEBUG: inspect filename determination flags
+            print(f"[DEBUG] _finalize_default_style_recording: triggered_by_job={was_triggered_by_job}, job_name={job_name}, use_job_name_for_output={use_job_name}, output_file_name={output_file_name}")
+
             final_file_path = misc_helpers.get_output_file_path(
                 self.media_path,
-                self.main_window.control['OutputMediaFolder']
-                # default version didn't use job names here, so we don't either
+                self.main_window.control['OutputMediaFolder'],
+                job_name=job_name,
+                use_job_name_for_output=use_job_name,
+                output_file_name=output_file_name
             )
 
             # Ensure output directory exists
@@ -1277,6 +1301,7 @@ class VideoProcessor(QObject):
             use_job_name_for_output=use_job_name,
             output_file_name=output_file_name
         )
+        print(f"[DEBUG] _finalize_default_style_recording: Computed final_file_path={final_file_path}")
 
         # --- Ensure Output Directory Exists ---
         output_dir = os.path.dirname(final_file_path)
