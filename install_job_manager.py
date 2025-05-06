@@ -13,10 +13,10 @@ DEBUG = False
 JOB_MANAGER_REPO_URL = "https://github.com/axel-devs/VisoMaster-Job-Manager.git"
 STOCK_REPO_URL = "https://github.com/visomaster/VisoMaster.git"
 HANS_EXPERIMENTAL_REPO_URL = "https://github.com/asdf31jsa/VisoMaster-Experimental.git"
-JOB_MANAGER_BRANCH = "dev"
+JOB_MANAGER_BRANCH = "main"
 STOCK_BRANCH = "main"
 HANS_EXPERIMENTAL_BRANCH = "ALL_Working"
-TARGET_ITEMS = ["app", "main.py"]
+TARGET_ITEMS = ["app", "main.py", "start.bat", "start_portable.bat"]
 HANS_TARGET_FILE_RELATIVE = os.path.join("app", "processors", "video_processor.py")
 TEMP_PREFIX = "visomaster_updater_temp_"
 STOCK_VS_JM_PATCH_FILENAME = "job-manager_vs_stock.patch"
@@ -673,8 +673,8 @@ def main():
                  final_exit_code = 1
                  print("\n--- Fallback: Direct Overwrite Needed ---")
                  if hans_mod_installed_or_requested:
-                     debug.print("Automatic patching failed even after preparing Hans' file.")
-                     debug.print("This suggests deeper conflicts or issues.")
+                     print_debug("Automatic patching failed even after preparing Hans' file.")
+                     print_debug("This suggests deeper conflicts or issues.")
                      print("\nTo install Job Manager, a full overwrite of 'app' and 'main.py' is required.")
                      while True:
                          answer_overwrite = input("Overwrite installation with Job Manager files? [y/N]: ").lower().strip()

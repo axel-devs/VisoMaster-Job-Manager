@@ -599,6 +599,8 @@ class JobProcessor(QThread):
             print("[DEBUG] job_loaded_event received!")
 
             print(f"[DEBUG] Toggling record button for job '{job_name}'...")
+            # Mark that this recording was initiated by the Job Manager
+            self.main_window.job_manager_initiated_record = True
             self.main_window.buttonMediaRecord.toggle()
 
             # Wait for processing (either style) to actually start before checking for completion

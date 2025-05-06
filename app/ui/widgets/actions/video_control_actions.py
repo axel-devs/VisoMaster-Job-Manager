@@ -129,7 +129,7 @@ def add_video_slider_marker(main_window: 'MainWindow'):
     current_position = int(main_window.videoSeekSlider.value())
     # print("current_position", current_position)
     if not main_window.target_faces:
-        common_widget_actions.create_and_show_messagebox(main_window, 'No Target Face Found', 'You need to have atleast one target face to create a marker', main_window.videoSeekSlider)
+        common_widget_actions.create_and_show_messagebox(main_window, 'No Target Face Found', 'You need to have at least one target face to create a marker', main_window.videoSeekSlider)
     elif main_window.markers.get(current_position):
         common_widget_actions.create_and_show_messagebox(main_window, 'Marker Already Exists!', 'A Marker already exists for this position!', main_window.videoSeekSlider)
     else:
@@ -397,9 +397,11 @@ def play_video(main_window: 'MainWindow', checked: bool):
 
 def record_video(main_window: 'MainWindow', checked: bool):
     video_processor = main_window.video_processor
-    if video_processor.file_type not in ['video', 'image']: # Allow recording for images (single frame) too?
+    # Determine if this record action was initiated by the Job Manager
+    job_mgr_flag = getattr(main_window, 'job_manager_initiated_record', False)
+    if video_processor.file_type not in ['video', 'image']:
         main_window.buttonMediaRecord.blockSignals(True)
-        main_window.buttonMediaRecord.setChecked(False) # Immediately uncheck if not video/image
+        main_window.buttonMediaRecord.setChecked(False)
         main_window.buttonMediaRecord.blockSignals(False)
         if video_processor.file_type == 'webcam':
             common_widget_actions.create_and_show_messagebox(main_window, 'Recording Not Supported', 'Recording webcam stream is not supported yet.', main_window)
@@ -478,14 +480,18 @@ def record_video(main_window: 'MainWindow', checked: bool):
                 # Disable parameters/controls during multi-segment recording (handled by start_multi_segment)
                 # layout_actions.disable_all_parameters_and_control_widget(main_window) # Removed, handled internally
 
-                # --- Check if triggered in a job context ---
-                is_job_context = bool(getattr(main_window, 'current_job_name', None))
-                print(f"[DEBUG] record_video: is_job_context = {is_job_context}")
-                
+                # --- Check if triggered by Job Manager for this recording ---
+                is_job_context = job_mgr_flag
+                print(f"[DEBUG] record_video: job_mgr_flag = {is_job_context}")
                 video_processor.start_multi_segment_recording(
-                    valid_pairs, 
-                    triggered_by_job_manager=is_job_context # Pass True if job name exists
+                    valid_pairs,
+                    triggered_by_job_manager=is_job_context
                 )
+                # Clear the flag so manual recordings won't be considered job-initiated
+                try:
+                    main_window.job_manager_initiated_record = False
+                except Exception:
+                    pass
             else:
                 print("[WARN] Recording not started due to invalid marker configuration.")
                 # main_window.buttonMediaRecord.setChecked(False) # Handled in validation

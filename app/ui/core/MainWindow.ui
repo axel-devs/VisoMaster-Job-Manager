@@ -16,7 +16,7 @@
    </font>
   </property>
   <property name="windowTitle">
-   <string>VisoMaster v0.1.6 + Job Manager v0.2</string>
+   <string>VisoMaster v0.1.6 + Job Manager v0.3</string>
   </property>
   <property name="windowIcon">
    <iconset resource="media.qrc">
@@ -81,7 +81,7 @@
          <item>
           <widget class="QCheckBox" name="faceCompareCheckBox">
            <property name="text">
-            <string>VIew Face Compare</string>
+            <string>View Face Compare</string>
            </property>
           </widget>
          </item>
