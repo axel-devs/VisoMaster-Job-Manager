@@ -582,7 +582,7 @@ def main():
             break
         elif answer in ('n', ''):
             while True:
-                answer_install = input("Would you like to install Hans' Mod _instead_ of stock? [y/N]: ").lower().strip()
+                answer_install = input("Would you like to install Hans' Experimental Mod? [y/N]: ").lower().strip()
                 if answer_install == 'y': hans_mod_installed_or_requested = True; break
                 elif answer_install in ('n', ''): hans_mod_installed_or_requested = False; break
                 else: print("Please answer 'y' or 'n'.")
@@ -591,7 +591,7 @@ def main():
     if hans_mod_installed_or_requested:
         print("\nDisclaimer: Hans' Mod and Job Manager compatibility is not guaranteed.")
         while True:
-            answer_proceed = input("Would you like to install or keep Hans' Mod with Job Manager? [y/N]: ").lower().strip()
+            answer_proceed = input("Proceed? [y/N]: ").lower().strip()
             if answer_proceed == 'y': break
             elif answer_proceed in ('n', ''): print("Install cancelled."); return 1
             else: print("Please answer 'y' or 'n'.")
