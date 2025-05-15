@@ -162,7 +162,7 @@ class VideoProcessor(QObject):
             if self.is_processing_segments or self.recording:
                 if self.recording_sp and self.recording_sp.stdin and not self.recording_sp.stdin.closed:
                     try:
-                        skip_unswapped_enabled = self.main_window.control.get('SkipUnswappedFramesToggle', False)
+                        skip_unswapped_enabled = self.main_window.control.get('SkipFramesEnableToggle', False)
                         # Use the actual frame_was_swapped flag received from FrameWorker
                         # No longer using getattr placeholder
 
@@ -797,69 +797,32 @@ class VideoProcessor(QObject):
 
             print("Adding audio (default-style merge)...")
 
-            skip_unswapped_enabled = self.main_window.control.get('SkipUnswappedFramesToggle', False)
+            skip_unswapped_enabled = self.main_window.control.get('SkipFramesEnableToggle', False)
 
             if skip_unswapped_enabled and self.kept_frame_info:
                 print("[INFO] Using complex filter for audio due to skipped frames.")
-                # Construct the complex filter for audio
-                # Example: [1:a]aselect='between(t,0,1)+between(t,2,3)',asetpts=PTS-STARTPTS[aud]
-                select_filter_parts = []
-                for start_time, end_time in self.kept_frame_info:
-                    select_filter_parts.append(f"between(t,{start_time:.3f},{end_time:.3f})")
-                
-                if not select_filter_parts: # No frames were kept
-                    print("[WARN] No frames were kept; output video will have no audio and likely be empty.")
-                    # FFmpeg will likely fail if no video frames were written and we try to map audio
-                    # We might need to just copy the (empty) temp_file to final_file_path and skip audio merge
-                    try:
-                        if os.path.exists(self.temp_file):
-                            shutil.copy(self.temp_file, final_file_path)
-                            print(f"--- Created empty video (no frames kept): {final_file_path} ---")
-                        else:
-                            print("[ERROR] Temp file does not exist and no frames kept.")
-                    except Exception as copy_err:
-                        print(f"[ERROR] Could not copy empty temp file: {copy_err}")
-                    # Clean up temp file and return
-                    if self.temp_file and os.path.exists(self.temp_file):
-                        try: os.remove(self.temp_file)
-                        except OSError as e: print(f"[WARN] Failed to remove temp file {self.temp_file}: {e}")
-                    self.temp_file = ''
-                    # Reset UI and return (similar to other error paths)
-                    layout_actions.enable_all_parameters_and_control_widget(self.main_window)
-                    video_control_actions.reset_media_buttons(self.main_window)
-                    self.recording = False
-                    return
-
-                aselect_filter = "+".join(select_filter_parts)
-                # Check if aselect_filter is empty, which means no frames kept. 
-                # This should be handled by the `if not select_filter_parts` block above, but double-check.
-                if not aselect_filter:
-                     print("[ERROR] aselect_filter is empty even though kept_frame_info was not. This is a bug.")
-                     # Fallback or error handling here
-
-                # For audio, we apply aselect and then concat. Simpler to use select on segments and then amix or concat. Or use aselect with asetpts.
-                # Let's try a simpler approach first if ffmpeg supports it well, or build up the filter_complex string.
-                # The goal is to select audio segments corresponding to self.kept_frame_info and concatenate them.
-
-                # Filter complex: [1:a]aselect='expr',asetpts=PTS-STARTPTS[a_selected]; [a_selected]concat=n=X:v=0:a=1[out_audio]
-                # This is tricky. A more robust way for many segments is to create multiple trimmed inputs and concat them.
-                # However, for a single input audio stream, a complex aselect is common.
-
-                complex_filter = f"[1:a]aselect='{aselect_filter}',asetpts=PTS-STARTPTS[aud]"
-
+                # Build filter_complex for audio: trim and concatenate the kept audio segments
+                segments = len(self.kept_frame_info)
+                filter_parts = []
+                for idx, (start_time, end_time) in enumerate(self.kept_frame_info):
+                    filter_parts.append(
+                        f"[1:a]atrim=start={start_time:.6f}:end={end_time:.6f},"
+                        f"asetpts=PTS-STARTPTS[a{idx}]"
+                    )
+                # Concatenate all trimmed segments into one audio stream
+                concat_inputs = ''.join(f"[a{idx}]" for idx in range(segments))
+                filter_complex = ';'.join(filter_parts) + ';' + f"{concat_inputs}concat=n={segments}:v=0:a=1[aud]"
                 args = [
                     "ffmpeg",
                     '-hide_banner',
                     '-loglevel', 'error',
-                    "-i", self.temp_file,  # Input 0: Temp video (already processed, video only)
-                    "-i", self.media_path,  # Input 1: Original media (for audio)
-                    "-filter_complex", complex_filter,
-                    "-map", "0:v:0",        # Map video from input 0
-                    "-map", "[aud]",       # Map the filtered audio
-                    "-c:v", "copy",       # Copy video stream as is
-                    # Audio codec might need to be specified if concat filter changes things, but asetpts should be fine.
-                    # Let ffmpeg choose audio codec, or specify one like aac.
-                    # "-c:a", "aac",
+                    "-i", self.temp_file,
+                    "-i", self.media_path,
+                    "-filter_complex", filter_complex,
+                    "-map", "0:v:0",
+                    "-map", "[aud]",
+                    "-c:v", "copy",
+                    "-c:a", "aac",
                     "-shortest",
                     final_file_path
                 ]
@@ -1025,7 +988,7 @@ class VideoProcessor(QObject):
         print(f"Creating FFmpeg (Segment {segment_num}): Video Dim={frame_width}x{frame_height}, FPS={self.fps}, Output='{output_filename}'")
         print(f"  Audio Segment: Start={start_time_sec:.3f}s, End={end_time_sec:.3f}s (Frames {start_frame}-{end_frame})")
 
-        skip_unswapped_enabled = self.main_window.control.get('SkipUnswappedFramesToggle', False)
+        skip_unswapped_enabled = self.main_window.control.get('SkipFramesEnableToggle', False)
 
         if Path(output_filename).is_file():
             try:
@@ -1443,7 +1406,7 @@ class VideoProcessor(QObject):
         list_file_path = os.path.join(self.segment_temp_dir, "mylist.txt")
         concatenation_successful = False
 
-        skip_unswapped_enabled = self.main_window.control.get('SkipUnswappedFramesToggle', False)
+        skip_unswapped_enabled = self.main_window.control.get('SkipFramesEnableToggle', False)
 
         if skip_unswapped_enabled:
             # --- Handle skipped frames: Concatenate video-only segments, then merge with filtered audio ---
@@ -1477,7 +1440,7 @@ class VideoProcessor(QObject):
                 if self.kept_frame_info:
                     select_filter_parts = []
                     for start_time, end_time in self.kept_frame_info:
-                        select_filter_parts.append(f"between(t,{start_time:.3f},{end_time:.3f})")
+                        select_filter_parts.append(f"between(t,{start_time:.6f},{end_time:.6f})")
                     
                     if not select_filter_parts:
                         print("[WARN] No frames were kept for audio processing, output will be video only.")
@@ -1498,7 +1461,7 @@ class VideoProcessor(QObject):
                             "-map", "0:v:0",
                             "-map", "[aud]",
                             "-c:v", "copy",
-                            # "-c:a", "aac", # Or let ffmpeg choose
+                            "-c:a", "aac",  # Encode audio with AAC
                             "-shortest",
                             final_file_path
                         ]

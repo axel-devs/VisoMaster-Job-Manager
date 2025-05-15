@@ -1,6 +1,7 @@
 from app.ui.widgets.actions import control_actions
 import cv2
 from app.helpers.typing_helper import LayoutDictTypes
+
 SETTINGS_LAYOUT_DATA: LayoutDictTypes = {
     'Appearance': {
         'ThemeSelection': {
@@ -55,13 +56,11 @@ SETTINGS_LAYOUT_DATA: LayoutDictTypes = {
             'step': 1,
             'help': 'Set the maximum FPS of the video when playing'
         },
-        'SkipUnswappedFramesToggle': {
+        'SkipFramesEnableToggle':{
             'level': 1,
             'label': 'Skip Unswapped Frames',
-            'default': False,
-            'help': 'If enabled, exclude frames without swaps from the output video. Audio will be synced.',
-            'exec_function': None, # No specific action needed on change, value read during processing
-            'exec_function_args': [],
+            'default': False, # Default state is off
+            'help': 'Skip frames during processing where no face swap occurred.',
         },
     },
     'Auto Swap':{
@@ -95,9 +94,9 @@ SETTINGS_LAYOUT_DATA: LayoutDictTypes = {
             'min_value': '1',
             'max_value': '50',
             'default': '20',
-            'step': 1,     
+            'step': 1,
             'help': 'Set the maximum number of faces to detect in a frame'
-   
+
         },
         'AutoRotationToggle': {
             'level': 1,

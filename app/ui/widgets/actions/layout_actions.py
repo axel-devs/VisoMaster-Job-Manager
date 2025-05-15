@@ -12,8 +12,13 @@ from app.ui.widgets.actions import video_control_actions
 from app.ui.widgets import widget_components
 # from app.UI.Widgets.WidgetComponents import *
 from app.helpers.typing_helper import LayoutDictTypes
+from app.helpers.settings_helper import get_default
 
 def add_widgets_to_tab_layout(main_window: 'MainWindow', LAYOUT_DATA: LayoutDictTypes, layoutWidget: QtWidgets.QVBoxLayout, data_type='parameter'):
+    # Override widget default values from settings.ini
+    for category, widgets in LAYOUT_DATA.items():
+        for widget_name, widget_data in widgets.items():
+            widget_data['default'] = get_default(category, widget_name, widget_data['default'])
     layout = QtWidgets.QVBoxLayout()
     layout.setContentsMargins(0, 0, 10, 0)  # Adjust left margin (20px in this example)
     scroll_area = QtWidgets.QScrollArea()
@@ -67,13 +72,16 @@ def add_widgets_to_tab_layout(main_window: 'MainWindow', LAYOUT_DATA: LayoutDict
 
             elif 'Selection' in widget_name:
                 widget = widget_components.SelectionBox(label=widget_data['label'], widget_name=widget_name, group_layout_data=widgets, label_widget=label, main_window=main_window, default_value=widget_data['default'], selection_values=widget_data['options'])
+                # Populate items based on options callable or list
                 if callable(widget_data['options']):
-                    widget.addItems(widget_data['options']())
-                    widget.setCurrentText(widget_data['default']())
+                    items = widget_data['options']()
                 else:
-                    widget.addItems(widget_data['options'])
-                    widget.setCurrentText(widget_data['default'])
-
+                    items = widget_data['options']
+                widget.addItems(items)
+                # Set the current text to the default value
+                default_val = widget_data['default']() if callable(widget_data['default']) else widget_data['default']
+                widget.setCurrentText(default_val)
+                
                 widget.reset_default_button = widget_components.ParameterResetDefaultButton(related_widget=widget)
 
                 horizontal_layout = add_horizontal_layout_to_category(category_layout, label, widget, widget.reset_default_button)

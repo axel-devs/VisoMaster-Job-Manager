@@ -6,6 +6,7 @@ import copy
 from PySide6 import QtWidgets, QtGui
 from PySide6 import QtCore
 from PySide6.QtWidgets import QInputDialog, QMessageBox
+from PySide6.QtCore import QSettings
 
 from app.ui.core.main_window import Ui_MainWindow
 import app.ui.widgets.actions.common_actions as common_widget_actions
@@ -220,10 +221,20 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def __init__(self):
         super(MainWindow, self).__init__()
+        # Initialize QSettings
+        self.settings = QSettings("VisoMaster", "JobManager")
         self.setupUi(self)
         self.initialize_variables()
         self.initialize_widgets()
         self.load_last_workspace()
+
+        # Restore main window state and geometry
+        if self.settings.contains("mainWindow/state"):
+            self.restoreState(self.settings.value("mainWindow/state"))
+            print("MainWindow: Restored state.") # For debugging
+        if self.settings.contains("mainWindow/geometry"):
+            self.restoreGeometry(self.settings.value("mainWindow/geometry"))
+            print("MainWindow: Restored geometry.") # For debugging
 
     def resizeEvent(self, event: QtGui.QResizeEvent):
         # print("Called resizeEvent()")
@@ -274,6 +285,13 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         list_view_actions.clear_stop_loading_target_media(self)
 
         save_load_actions.save_current_workspace(self, 'last_workspace.json')
+
+        # Save main window state and geometry
+        if self.settings: # Ensure settings object exists
+            self.settings.setValue("mainWindow/state", self.saveState())
+            self.settings.setValue("mainWindow/geometry", self.saveGeometry())
+            print("MainWindow: Saved state and geometry.") # For debugging
+        
         # Optionally handle the event if needed
         event.accept()
 
