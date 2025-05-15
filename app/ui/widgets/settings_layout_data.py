@@ -55,6 +55,14 @@ SETTINGS_LAYOUT_DATA: LayoutDictTypes = {
             'step': 1,
             'help': 'Set the maximum FPS of the video when playing'
         },
+        'SkipUnswappedFramesToggle': {
+            'level': 1,
+            'label': 'Skip Unswapped Frames',
+            'default': False,
+            'help': 'If enabled, exclude frames without swaps from the output video. Audio will be synced.',
+            'exec_function': None, # No specific action needed on change, value read during processing
+            'exec_function_args': [],
+        },
     },
     'Auto Swap':{
         'AutoSwapToggle': {

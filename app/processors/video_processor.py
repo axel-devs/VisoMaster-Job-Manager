@@ -29,9 +29,9 @@ if TYPE_CHECKING:
     from app.ui.main_ui import MainWindow
 
 class VideoProcessor(QObject):
-    frame_processed_signal = Signal(int, QPixmap, numpy.ndarray)
-    webcam_frame_processed_signal = Signal(QPixmap, numpy.ndarray)
-    single_frame_processed_signal = Signal(int, QPixmap, numpy.ndarray)
+    frame_processed_signal = Signal(int, QPixmap, numpy.ndarray, bool) # Added bool for was_swapped
+    webcam_frame_processed_signal = Signal(QPixmap, numpy.ndarray, bool) # Added bool for was_swapped
+    single_frame_processed_signal = Signal(int, QPixmap, numpy.ndarray, bool) # Added bool for was_swapped
     start_segment_timers_signal = Signal(int) # For multi-segment
     processing_started_signal = Signal() # Unified signal for any processing start
 
@@ -51,6 +51,7 @@ class VideoProcessor(QObject):
         self.current_frame: numpy.ndarray = []
         self.virtcam: pyvirtualcam.Camera|None = None
         self.recording_sp: subprocess.Popen|None = None # Used by both recording styles
+        self.kept_frame_info: list[tuple[float, float]] = [] # Stores (start_time, end_time) of kept frames
 
         # --- Flags and State for Recording Styles ---
         self.recording: bool = False # default style recording flag
@@ -82,8 +83,8 @@ class VideoProcessor(QObject):
 
         # --- Frame Handling ---
         self.next_frame_to_display = 0
-        self.frames_to_display: Dict[int, Tuple[QPixmap, numpy.ndarray]] = {}
-        self.webcam_frames_to_display = queue.Queue()
+        self.frames_to_display: Dict[int, Tuple[QPixmap, numpy.ndarray, bool]] = {} # Added bool for was_swapped
+        self.webcam_frames_to_display = queue.Queue() # Store (pixmap, frame, was_swapped)
 
         # --- Signal Connections ---
         self.frame_processed_signal.connect(self.store_frame_to_display)
@@ -91,16 +92,16 @@ class VideoProcessor(QObject):
         self.single_frame_processed_signal.connect(self.display_current_frame)
         self.start_segment_timers_signal.connect(self._start_timers_from_signal) # For multi-segment
 
-    @Slot(int, QPixmap, numpy.ndarray)
-    def store_frame_to_display(self, frame_number, pixmap, frame):
-        self.frames_to_display[frame_number] = (pixmap, frame)
+    @Slot(int, QPixmap, numpy.ndarray, bool)
+    def store_frame_to_display(self, frame_number, pixmap, frame, was_swapped):
+        self.frames_to_display[frame_number] = (pixmap, frame, was_swapped)
 
-    @Slot(QPixmap, numpy.ndarray)
-    def store_webcam_frame_to_display(self, pixmap, frame):
-        self.webcam_frames_to_display.put((pixmap, frame))
+    @Slot(QPixmap, numpy.ndarray, bool)
+    def store_webcam_frame_to_display(self, pixmap, frame, was_swapped):
+        self.webcam_frames_to_display.put((pixmap, frame, was_swapped))
 
-    @Slot(int, QPixmap, numpy.ndarray)
-    def display_current_frame(self, frame_number, pixmap, frame):
+    @Slot(int, QPixmap, numpy.ndarray, bool)
+    def display_current_frame(self, frame_number, pixmap, frame, was_swapped):
         # This handles single frame updates (e.g., after seeking)
         if self.main_window.loading_new_media:
             graphics_view_actions.update_graphics_view(self.main_window, pixmap, frame_number, reset_fit=True)
@@ -151,7 +152,7 @@ class VideoProcessor(QObject):
             # Frame not ready yet, wait for next timer tick
             return
         else:
-            pixmap, frame = self.frames_to_display.pop(self.next_frame_to_display)
+            pixmap, frame, frame_was_swapped = self.frames_to_display.pop(self.next_frame_to_display) # Unpack was_swapped
             self.current_frame = frame # Update current frame state
 
             # Send to Virtual Cam if enabled
@@ -161,7 +162,20 @@ class VideoProcessor(QObject):
             if self.is_processing_segments or self.recording:
                 if self.recording_sp and self.recording_sp.stdin and not self.recording_sp.stdin.closed:
                     try:
-                        self.recording_sp.stdin.write(frame.tobytes())
+                        skip_unswapped_enabled = self.main_window.control.get('SkipUnswappedFramesToggle', False)
+                        # Use the actual frame_was_swapped flag received from FrameWorker
+                        # No longer using getattr placeholder
+
+                        if skip_unswapped_enabled and not frame_was_swapped:
+                            # If skipping enabled and frame was not swapped, do not write to ffmpeg
+                            pass # Frame is skipped
+                        else:
+                            self.recording_sp.stdin.write(frame.tobytes())
+                            if self.fps > 0: # Ensure FPS is valid before calculation
+                                # self.next_frame_to_display is the 0-indexed frame number popped from frames_to_display
+                                frame_start_time = self.next_frame_to_display / self.fps
+                                frame_end_time = (self.next_frame_to_display + 1) / self.fps
+                                self.kept_frame_info.append((frame_start_time, frame_end_time))
                     except OSError as e:
                         # Log appropriately based on mode
                         log_prefix = f"segment {self.current_segment_index + 1}" if self.is_processing_segments else "recording"
@@ -193,7 +207,7 @@ class VideoProcessor(QObject):
         if self.webcam_frames_to_display.empty():
             return
         else:
-            pixmap, frame = self.webcam_frames_to_display.get()
+            pixmap, frame, was_swapped = self.webcam_frames_to_display.get() # Unpack was_swapped
             self.current_frame = frame
             self.send_frame_to_virtualcam(frame)
             graphics_view_actions.update_graphics_view(self.main_window, pixmap, 0) # Frame number is irrelevant for webcam
@@ -257,6 +271,11 @@ class VideoProcessor(QObject):
         self.processing = True # General flag ON
         # Ensure multi-segment flag is OFF for this mode
         self.is_processing_segments = False
+
+        # Reset state for a new processing session
+        self.kept_frame_info = [] # Reset for new recording
+        self.frames_to_display.clear()
+        self.join_and_clear_threads() # Clear any lingering threads
 
         # Determine if this default-style recording was initiated by the Job Manager
         job_mgr_flag = getattr(self.main_window, 'job_manager_initiated_record', False)
@@ -777,20 +796,89 @@ class VideoProcessor(QObject):
                     print(f"[WARN] Failed to remove existing final file {final_file_path}: {e}") # Log but attempt merge anyway
 
             print("Adding audio (default-style merge)...")
-            # Arguments exactly like default stop_processing merge step
-            args = ["ffmpeg",
+
+            skip_unswapped_enabled = self.main_window.control.get('SkipUnswappedFramesToggle', False)
+
+            if skip_unswapped_enabled and self.kept_frame_info:
+                print("[INFO] Using complex filter for audio due to skipped frames.")
+                # Construct the complex filter for audio
+                # Example: [1:a]aselect='between(t,0,1)+between(t,2,3)',asetpts=PTS-STARTPTS[aud]
+                select_filter_parts = []
+                for start_time, end_time in self.kept_frame_info:
+                    select_filter_parts.append(f"between(t,{start_time:.3f},{end_time:.3f})")
+                
+                if not select_filter_parts: # No frames were kept
+                    print("[WARN] No frames were kept; output video will have no audio and likely be empty.")
+                    # FFmpeg will likely fail if no video frames were written and we try to map audio
+                    # We might need to just copy the (empty) temp_file to final_file_path and skip audio merge
+                    try:
+                        if os.path.exists(self.temp_file):
+                            shutil.copy(self.temp_file, final_file_path)
+                            print(f"--- Created empty video (no frames kept): {final_file_path} ---")
+                        else:
+                            print("[ERROR] Temp file does not exist and no frames kept.")
+                    except Exception as copy_err:
+                        print(f"[ERROR] Could not copy empty temp file: {copy_err}")
+                    # Clean up temp file and return
+                    if self.temp_file and os.path.exists(self.temp_file):
+                        try: os.remove(self.temp_file)
+                        except OSError as e: print(f"[WARN] Failed to remove temp file {self.temp_file}: {e}")
+                    self.temp_file = ''
+                    # Reset UI and return (similar to other error paths)
+                    layout_actions.enable_all_parameters_and_control_widget(self.main_window)
+                    video_control_actions.reset_media_buttons(self.main_window)
+                    self.recording = False
+                    return
+
+                aselect_filter = "+".join(select_filter_parts)
+                # Check if aselect_filter is empty, which means no frames kept. 
+                # This should be handled by the `if not select_filter_parts` block above, but double-check.
+                if not aselect_filter:
+                     print("[ERROR] aselect_filter is empty even though kept_frame_info was not. This is a bug.")
+                     # Fallback or error handling here
+
+                # For audio, we apply aselect and then concat. Simpler to use select on segments and then amix or concat. Or use aselect with asetpts.
+                # Let's try a simpler approach first if ffmpeg supports it well, or build up the filter_complex string.
+                # The goal is to select audio segments corresponding to self.kept_frame_info and concatenate them.
+
+                # Filter complex: [1:a]aselect='expr',asetpts=PTS-STARTPTS[a_selected]; [a_selected]concat=n=X:v=0:a=1[out_audio]
+                # This is tricky. A more robust way for many segments is to create multiple trimmed inputs and concat them.
+                # However, for a single input audio stream, a complex aselect is common.
+
+                complex_filter = f"[1:a]aselect='{aselect_filter}',asetpts=PTS-STARTPTS[aud]"
+
+                args = [
+                    "ffmpeg",
                     '-hide_banner',
                     '-loglevel', 'error',
-                    "-i", self.temp_file, # Input 0: Temp video
-                     # Input 1: Original audio, segmented using -ss/-to
-                    "-ss", str(self.play_start_time),
-                    "-to", str(self.play_end_time),
-                    "-i", self.media_path,
-                    "-c", "copy",       # Copy both video (already encoded) and audio
-                    "-map", "0:v:0",    # Map video from input 0
-                    "-map", "1:a:0?",   # Map audio from input 1 (optional)
-                    "-shortest",        # Finish when shortest input ends (should be audio segment)
-                    final_file_path]
+                    "-i", self.temp_file,  # Input 0: Temp video (already processed, video only)
+                    "-i", self.media_path,  # Input 1: Original media (for audio)
+                    "-filter_complex", complex_filter,
+                    "-map", "0:v:0",        # Map video from input 0
+                    "-map", "[aud]",       # Map the filtered audio
+                    "-c:v", "copy",       # Copy video stream as is
+                    # Audio codec might need to be specified if concat filter changes things, but asetpts should be fine.
+                    # Let ffmpeg choose audio codec, or specify one like aac.
+                    # "-c:a", "aac",
+                    "-shortest",
+                    final_file_path
+                ]
+            else:
+                # Original FFmpeg command for when skipping is disabled or no frames were kept (or feature not used)
+                print("[INFO] Using simple audio merge (no frame skipping or no kept frames)." if skip_unswapped_enabled else "[INFO] Using simple audio merge.")
+                args = ["ffmpeg",
+                        '-hide_banner',
+                        '-loglevel', 'error',
+                        "-i", self.temp_file, # Input 0: Temp video
+                        # Input 1: Original audio, segmented using -ss/-to
+                        "-ss", str(self.play_start_time),
+                        "-to", str(self.play_end_time),
+                        "-i", self.media_path,
+                        "-c", "copy",       # Copy both video (already encoded) and audio
+                        "-map", "0:v:0",    # Map video from input 0
+                        "-map", "1:a:0?",   # Map audio from input 1 (optional)
+                        "-shortest",        # Finish when shortest input ends (should be audio segment)
+                        final_file_path]
             try:
                 subprocess.run(args, check=True) # Use check=True to raise error on failure
                 print(f"--- Successfully created final video (default-style): {final_file_path} ---")
@@ -937,41 +1025,63 @@ class VideoProcessor(QObject):
         print(f"Creating FFmpeg (Segment {segment_num}): Video Dim={frame_width}x{frame_height}, FPS={self.fps}, Output='{output_filename}'")
         print(f"  Audio Segment: Start={start_time_sec:.3f}s, End={end_time_sec:.3f}s (Frames {start_frame}-{end_frame})")
 
+        skip_unswapped_enabled = self.main_window.control.get('SkipUnswappedFramesToggle', False)
+
         if Path(output_filename).is_file():
             try:
                 os.remove(output_filename)
             except OSError as e:
                 print(f"[WARN] Could not remove existing segment file {output_filename}: {e}")
 
-        # Your original args, ensure pix_fmt matches frame data sent (RGB)
-        args = [
-            "ffmpeg",
-            "-hide_banner",
-            "-loglevel", "error",
-            # Input 0: Processed Video from Pipe (RGB)
-            "-f", "rawvideo",
-            "-pix_fmt", "rgb24", # Sending RGB frames
-            "-s", f"{frame_width}x{frame_height}",
-            "-r", str(self.fps),
-            "-i", "pipe:0", # Input 0 from pipe
-            # Input 1: Original Audio from File (Segmented)
-            "-ss", str(start_time_sec),
-            "-to", str(end_time_sec),
-            "-i", self.media_path, # Input 1 is original file
-            # Mapping
-            "-map", "0:v:0", # Video from pipe
-            "-map", "1:a:0?", # Audio from file (optional)
-            # Video Codec & Options (Pad and format for compatibility)
-            "-vf", f"pad=ceil(iw/2)*2:ceil(ih/2)*2,format=yuvj420p",
-            "-c:v", "libx264",
-            "-crf", "18",
-            # Audio Codec
-            "-c:a", "copy", # Copy original audio stream segment
-            # Options
-            "-shortest", # Stop when shortest input (audio segment) ends
-            # Output File
-            output_filename
-        ]
+        if skip_unswapped_enabled:
+            print(f"  Segment {segment_num}: Recording VIDEO ONLY due to Skip Unswapped Frames setting.")
+            args = [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel", "error",
+                # Input 0: Processed Video from Pipe (RGB)
+                "-f", "rawvideo",
+                "-pix_fmt", "rgb24", # Sending RGB frames
+                "-s", f"{frame_width}x{frame_height}",
+                "-r", str(self.fps),
+                "-i", "pipe:0", # Input 0 from pipe
+                # Video Codec & Options (Pad and format for compatibility)
+                "-vf", f"pad=ceil(iw/2)*2:ceil(ih/2)*2,format=yuvj420p", # Ensure yuvj420p for x264
+                "-c:v", "libx264",
+                "-crf", "18",
+                # Output File
+                output_filename
+            ]
+        else:
+            print(f"  Audio Segment: Start={start_time_sec:.3f}s, End={end_time_sec:.3f}s (Frames {start_frame}-{end_frame})")
+            args = [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel", "error",
+                # Input 0: Processed Video from Pipe (RGB)
+                "-f", "rawvideo",
+                "-pix_fmt", "rgb24", # Sending RGB frames
+                "-s", f"{frame_width}x{frame_height}",
+                "-r", str(self.fps),
+                "-i", "pipe:0", # Input 0 from pipe
+                # Input 1: Original Audio from File (Segmented)
+                "-ss", str(start_time_sec),
+                "-to", str(end_time_sec),
+                "-i", self.media_path, # Input 1 is original file
+                # Mapping
+                "-map", "0:v:0", # Video from pipe
+                "-map", "1:a:0?", # Audio from file (optional)
+                # Video Codec & Options (Pad and format for compatibility)
+                "-vf", f"pad=ceil(iw/2)*2:ceil(ih/2)*2,format=yuvj420p",
+                "-c:v", "libx264",
+                "-crf", "18",
+                # Audio Codec
+                "-c:a", "copy", # Copy original audio stream segment
+                # Options
+                "-shortest", # Stop when shortest input (audio segment) ends
+                # Output File
+                output_filename
+            ]
 
         try:
             self.recording_sp = subprocess.Popen(args, stdin=subprocess.PIPE, bufsize=-1)
@@ -988,9 +1098,7 @@ class VideoProcessor(QObject):
 
     def start_multi_segment_recording(self, segments: list[tuple[int, int]], triggered_by_job_manager: bool = False):
         if self.processing or self.is_processing_segments:
-            print("[WARN] Attempted to start segment recording while already processing.")
-            # Optionally stop existing process? Or just return? Returning is safer.
-            # self.stop_processing()
+            print("[WARN] Cannot start multi-segment recording: Processing already active.")
             return
 
         if self.file_type != 'video':
@@ -1009,6 +1117,7 @@ class VideoProcessor(QObject):
         self.recording = False # Ensure default flag is off
         self.processing = True # General flag ON
 
+        self.kept_frame_info = [] # Reset for new recording
         self.triggered_by_job_manager = triggered_by_job_manager
         self.segments_to_process = sorted(segments) # Ensure segments are processed in order
         self.current_segment_index = -1
@@ -1333,74 +1442,157 @@ class VideoProcessor(QObject):
         # --- Create FFmpeg Concat List File ---
         list_file_path = os.path.join(self.segment_temp_dir, "mylist.txt")
         concatenation_successful = False
-        try:
-            print(f"Creating ffmpeg list file: {list_file_path}")
-            with open(list_file_path, 'w', encoding='utf-8') as f_list: # Specify encoding
-                for segment_path in valid_segment_files:
-                     # Use absolute path, sanitize for ffmpeg concat demuxer
-                     abs_path = os.path.abspath(segment_path)
-                     # FFmpeg concat requires forward slashes, even on Windows
-                     formatted_path = abs_path.replace('\\', '/') # Correctly escape backslash for replacement
-                     # Paths with spaces or special chars need single quotes
-                     # Ensure a proper newline character is written
-                     f_list.write(f"file '{formatted_path}'" + os.linesep)
 
-            print(f"Concatenating {len(valid_segment_files)} valid segments into {final_file_path}...")
-            concat_args = [
-                "ffmpeg", '-hide_banner', '-loglevel', 'error',
-                "-f", "concat",
-                "-safe", "0", # Allow unsafe paths (though we used absolute)
-                "-i", list_file_path,
-                "-c", "copy", # Copy streams directly without re-encoding
-                final_file_path
-            ]
-            subprocess.run(concat_args, check=True) # check=True raises error on failure
-            concatenation_successful = True
-            log_prefix = "Job Manager: " if was_triggered_by_job else ""
-            print(f"--- {log_prefix}Successfully created final video: {final_file_path} ---")
+        skip_unswapped_enabled = self.main_window.control.get('SkipUnswappedFramesToggle', False)
 
-        except subprocess.CalledProcessError as e:
-            print(f"[ERROR] FFmpeg command failed during final concatenation: {e}")
-            print(f"FFmpeg arguments: {' '.join(concat_args)}")
-            self.main_window.display_messagebox_signal.emit('Recording Error', f'FFmpeg command failed during concatenation:\\n{e}\\nCould not create final video.', self.main_window)
-        except FileNotFoundError:
-            print("[ERROR] FFmpeg not found. Ensure it's in your system PATH.")
-            self.main_window.display_messagebox_signal.emit('Recording Error', 'FFmpeg not found.', self.main_window)
-        except Exception as e:
-            print(f"[ERROR] An unexpected error occurred during finalization: {e}")
-            self.main_window.display_messagebox_signal.emit('Recording Error', f'An unexpected error occurred:\\n{e}', self.main_window)
+        if skip_unswapped_enabled:
+            # --- Handle skipped frames: Concatenate video-only segments, then merge with filtered audio ---
+            print("[INFO] Finalizing multi-segment recording with skipped frames logic.")
+            temp_concat_video_path = os.path.join(self.segment_temp_dir, "concatenated_video_only.mkv")
 
-        finally:
-            # --- Cleanup and Reset ---
-            self._cleanup_temp_dir() # Always cleanup temp dir
-
-            # Reset segment state regardless of success/failure
-            self.segments_to_process = []
-            self.current_segment_index = -1
-            self.temp_segment_files = []
-            self.current_segment_end_frame = None
-            self.triggered_by_job_manager = False
-
-            self.end_time = time.perf_counter()
-            processing_time = self.end_time - self.start_time
-
-            if concatenation_successful:
-                print(f"Total segment processing and concatenation finished in {processing_time:.2f} seconds")
-            else:
-                print(f"Segment processing/concatenation failed or aborted after {processing_time:.2f} seconds.")
-
-            # Final GPU clear and GC
-            print("Clearing GPU Cache and running garbage collection post-concatenation.")
+            # 1. Create concat list for video-only segments
             try:
-                if torch.cuda.is_available(): torch.cuda.empty_cache()
-            except ImportError: pass
-            except Exception as e: print(f"[WARN] Error clearing Torch cache: {e}")
-            gc.collect()
+                print(f"Creating ffmpeg list file for video-only segments: {list_file_path}")
+                with open(list_file_path, 'w', encoding='utf-8') as f_list:
+                    for segment_path in valid_segment_files:
+                        abs_path = os.path.abspath(segment_path)
+                        formatted_path = abs_path.replace('\\', '/')
+                        f_list.write(f"file '{formatted_path}'" + os.linesep)
 
-            # Always re-enable UI and reset buttons
-            layout_actions.enable_all_parameters_and_control_widget(self.main_window)
-            video_control_actions.reset_media_buttons(self.main_window)
-            print("Multi-segment processing flow finished.")
+                # 2. Concatenate video-only segments
+                concat_args = [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel", "error",
+                    "-f", "concat",
+                    "-safe", "0",
+                    "-i", list_file_path,
+                    "-c", "copy",
+                    temp_concat_video_path
+                ]
+                print(f"Concatenating {len(valid_segment_files)} video-only segments to {temp_concat_video_path}...")
+                subprocess.run(concat_args, check=True)
+
+                # 3. Prepare to merge with filtered audio
+                if self.kept_frame_info:
+                    select_filter_parts = []
+                    for start_time, end_time in self.kept_frame_info:
+                        select_filter_parts.append(f"between(t,{start_time:.3f},{end_time:.3f})")
+                    
+                    if not select_filter_parts:
+                        print("[WARN] No frames were kept for audio processing, output will be video only.")
+                        # Copy the concatenated video to final output
+                        shutil.copy(temp_concat_video_path, final_file_path)
+                        concatenation_successful = True
+                    else:
+                        aselect_filter = "+".join(select_filter_parts)
+                        complex_filter = f"[1:a]aselect='{aselect_filter}',asetpts=PTS-STARTPTS[aud]"
+
+                        merge_args = [
+                            "ffmpeg",
+                            '-hide_banner',
+                            '-loglevel', 'error',
+                            "-i", temp_concat_video_path,  # Input 0: Concatenated video
+                            "-i", self.media_path,      # Input 1: Original media (for audio)
+                            "-filter_complex", complex_filter,
+                            "-map", "0:v:0",
+                            "-map", "[aud]",
+                            "-c:v", "copy",
+                            # "-c:a", "aac", # Or let ffmpeg choose
+                            "-shortest",
+                            final_file_path
+                        ]
+                        print(f"Merging concatenated video with filtered audio to {final_file_path}...")
+                        subprocess.run(merge_args, check=True)
+                        concatenation_successful = True
+                else:
+                    print("[WARN] No kept_frame_info available. Outputting concatenated video without audio.")
+                    shutil.copy(temp_concat_video_path, final_file_path)
+                    concatenation_successful = True
+
+            except subprocess.CalledProcessError as e:
+                print(f"[ERROR] FFmpeg command failed during multi-segment finalization (skip unswapped): {e}")
+                print(f"FFmpeg arguments: {' '.join(e.cmd)}")
+                self.main_window.display_messagebox_signal.emit('Recording Error', f'FFmpeg command failed during segment concatenation/merge:\\n{e}', self.main_window)
+            except FileNotFoundError:
+                print("[ERROR] FFmpeg not found during multi-segment finalization.")
+                self.main_window.display_messagebox_signal.emit('Recording Error', 'FFmpeg not found.', self.main_window)
+            except Exception as e:
+                print(f"[ERROR] An unexpected error occurred during multi-segment finalization (skip unswapped): {e}")
+            finally:
+                if os.path.exists(temp_concat_video_path):
+                    try: os.remove(temp_concat_video_path)
+                    except OSError as e: print(f"[WARN] Failed to remove temp_concat_video_path: {e}")
+        else:
+            # --- Original logic for concatenating segments (assuming they have audio) ---
+            try:
+                print(f"Creating ffmpeg list file: {list_file_path}")
+                with open(list_file_path, 'w', encoding='utf-8') as f_list: # Specify encoding
+                    for segment_path in valid_segment_files:
+                         # Use absolute path, sanitize for ffmpeg concat demuxer
+                         abs_path = os.path.abspath(segment_path)
+                         # FFmpeg concat requires forward slashes, even on Windows
+                         formatted_path = abs_path.replace('\\', '/') # Correctly escape backslash for replacement
+                         # Paths with spaces or special chars need single quotes
+                         # Ensure a proper newline character is written
+                         f_list.write(f"file '{formatted_path}'" + os.linesep)
+
+                print(f"Concatenating {len(valid_segment_files)} valid segments into {final_file_path}...")
+                concat_args = [
+                    "ffmpeg", '-hide_banner', '-loglevel', 'error',
+                    "-f", "concat",
+                    "-safe", "0", # Allow unsafe paths (though we used absolute)
+                    "-i", list_file_path,
+                    "-c", "copy", # Copy streams directly without re-encoding
+                    final_file_path
+                ]
+                subprocess.run(concat_args, check=True) # check=True raises error on failure
+                concatenation_successful = True
+                log_prefix = "Job Manager: " if was_triggered_by_job else ""
+                print(f"--- {log_prefix}Successfully created final video: {final_file_path} ---")
+
+            except subprocess.CalledProcessError as e:
+                print(f"[ERROR] FFmpeg command failed during final concatenation: {e}")
+                print(f"FFmpeg arguments: {' '.join(concat_args)}")
+                self.main_window.display_messagebox_signal.emit('Recording Error', f'FFmpeg command failed during concatenation:\\n{e}\\nCould not create final video.', self.main_window)
+            except FileNotFoundError:
+                print("[ERROR] FFmpeg not found. Ensure it's in your system PATH.")
+                self.main_window.display_messagebox_signal.emit('Recording Error', 'FFmpeg not found.', self.main_window)
+            except Exception as e:
+                print(f"[ERROR] An unexpected error occurred during finalization: {e}")
+                self.main_window.display_messagebox_signal.emit('Recording Error', f'An unexpected error occurred:\\n{e}', self.main_window)
+
+            finally:
+                # --- Cleanup and Reset ---
+                self._cleanup_temp_dir() # Always cleanup temp dir
+
+                # Reset segment state regardless of success/failure
+                self.segments_to_process = []
+                self.current_segment_index = -1
+                self.temp_segment_files = []
+                self.current_segment_end_frame = None
+                self.triggered_by_job_manager = False
+
+                self.end_time = time.perf_counter()
+                processing_time = self.end_time - self.start_time
+
+                if concatenation_successful:
+                    print(f"Total segment processing and concatenation finished in {processing_time:.2f} seconds")
+                else:
+                    print(f"Segment processing/concatenation failed or aborted after {processing_time:.2f} seconds.")
+
+                # Final GPU clear and GC
+                print("Clearing GPU Cache and running garbage collection post-concatenation.")
+                try:
+                    if torch.cuda.is_available(): torch.cuda.empty_cache()
+                except ImportError: pass
+                except Exception as e: print(f"[WARN] Error clearing Torch cache: {e}")
+                gc.collect()
+
+                # Always re-enable UI and reset buttons
+                layout_actions.enable_all_parameters_and_control_widget(self.main_window)
+                video_control_actions.reset_media_buttons(self.main_window)
+                print("Multi-segment processing flow finished.")
 
     def _cleanup_temp_dir(self):
         """Safely removes the temporary directory used for segments."""

@@ -49,12 +49,12 @@ class FrameWorker(threading.Thread):
             self.is_view_face_mask = self.main_window.faceMaskCheckBox.isChecked() 
 
             # Process the frame with model inference
-            # print(f"Processing frame {self.frame_number}")
             output_frame_rgb = None # Frame to be sent via signal (needs to be RGB)
             frame_for_pixmap = None # Frame to be used for QPixmap (needs to be BGR)
+            was_swapped_in_frame = False # Initialize flag
 
             if self.main_window.swapfacesButton.isChecked() or self.main_window.editFacesButton.isChecked() or self.main_window.control['FrameEnhancerEnableToggle']:
-                output_frame_rgb = self.process_frame() # process_frame now returns RGB
+                output_frame_rgb, was_swapped_in_frame = self.process_frame() # process_frame now returns RGB and swap status
                 # Create BGR version for Pixmap
                 frame_for_pixmap = output_frame_rgb[..., ::-1]
             else:
@@ -62,6 +62,7 @@ class FrameWorker(threading.Thread):
                 output_frame_rgb = self.frame
                 # Create BGR version for Pixmap
                 frame_for_pixmap = output_frame_rgb[..., ::-1]
+                # was_swapped_in_frame remains False as no processing was done
 
             frame_for_pixmap = np.ascontiguousarray(frame_for_pixmap)
 
@@ -72,17 +73,17 @@ class FrameWorker(threading.Thread):
             # Output processed Webcam frame
             # Emit the RGB frame via signal
             if self.video_processor.file_type=='webcam' and not self.is_single_frame:
-                self.video_processor.webcam_frame_processed_signal.emit(pixmap, output_frame_rgb)
+                self.video_processor.webcam_frame_processed_signal.emit(pixmap, output_frame_rgb, was_swapped_in_frame)
 
             #Output Video frame (while playing)
             # Emit the RGB frame via signal
             elif not self.is_single_frame:
-                self.video_processor.frame_processed_signal.emit(self.frame_number, pixmap, output_frame_rgb)
+                self.video_processor.frame_processed_signal.emit(self.frame_number, pixmap, output_frame_rgb, was_swapped_in_frame)
             # Output Image/Video frame (Single frame)
             # Emit the RGB frame via signal
             else:
                 # print('Emitted single_frame_processed_signal')
-                self.video_processor.single_frame_processed_signal.emit(self.frame_number, pixmap, output_frame_rgb)
+                self.video_processor.single_frame_processed_signal.emit(self.frame_number, pixmap, output_frame_rgb, was_swapped_in_frame)
 
 
             # Mark the frame as done in the queue
@@ -99,6 +100,8 @@ class FrameWorker(threading.Thread):
     
     # @misc_helpers.benchmark
     def process_frame(self):
+        any_swap_occurred_this_frame = False # Initialize flag for this frame
+
         # Load frame into VRAM
         img = torch.from_numpy(self.frame.astype('uint8')).to(self.models_processor.device) #HxWxc
         img = img.permute(2,0,1)#cxHxW
@@ -173,6 +176,7 @@ class FrameWorker(threading.Thread):
                         if self.main_window.swapfacesButton.isChecked() or self.main_window.editFacesButton.isChecked():
                             sim = self.models_processor.findCosineDistance(fface['embedding'], target_face.get_embedding(control['RecognitionModelSelection'])) # Recognition for comparing
                             if sim>=parameters['SimilarityThresholdSlider']:
+                                any_swap_occurred_this_frame = True # A swap condition was met
                                 s_e = None
                                 fface['kps_5'] = self.keypoints_adjustments(fface['kps_5'], parameters) #Make keypoints adjustments
                                 arcface_model = self.models_processor.get_arcface_model(parameters['SwapModelSelection'])
@@ -192,6 +196,7 @@ class FrameWorker(threading.Thread):
                                         # cv2.imwrite('temp_swap_face.png', swapped_face.permute(1,2,0).cpu().numpy())
                                 if self.main_window.editFacesButton.isChecked():
                                     img = self.swap_edit_face_core(img, fface['kps_all'], parameters, control)
+                                    any_swap_occurred_this_frame = True # Edit face also counts as a swap for this purpose
 
         if control['ManualRotationEnableToggle']:
             img = v2.functional.rotate(img, angle=-control['ManualRotationAngleSlider'], interpolation=v2.InterpolationMode.BILINEAR, expand=True)
@@ -213,7 +218,7 @@ class FrameWorker(threading.Thread):
         img = img.permute(1,2,0)
         img = img.cpu().numpy()
         # RGB to BGR
-        return img
+        return img, any_swap_occurred_this_frame
     
     def keypoints_adjustments(self, kps_5: np.ndarray, parameters: dict) -> np.ndarray:
         # Change the ref points
