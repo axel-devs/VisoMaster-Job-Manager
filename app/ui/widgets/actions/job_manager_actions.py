@@ -592,7 +592,7 @@ class JobProcessor(QThread):
             print(f"[DEBUG] Emitting load_job_signal('{job_name}')")
             job_loaded_event.clear()
             self.load_job_signal.emit(job_name)
-            if not job_loaded_event.wait(timeout=30):
+            if not job_loaded_event.wait(timeout=180):
                  print(f"[ERROR] Timeout waiting for job '{job_name}' to load. Aborting.")
                  job_failed = True
                  continue
